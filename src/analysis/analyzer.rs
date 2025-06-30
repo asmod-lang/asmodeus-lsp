@@ -1,8 +1,6 @@
-use crate::error::{LspError, LspResult};
-use lexariel::{tokenize, LexerError};
-use parseid::{parse, ParserError};
 use tower_lsp::lsp_types::*;
 
+#[derive(Debug)]
 pub struct SemanticAnalyzer;
 
 impl SemanticAnalyzer {
@@ -10,14 +8,14 @@ impl SemanticAnalyzer {
         Self
     }
 
-    pub fn analyze_document(&self, content: &str, uri: &Url) -> Vec<Diagnostic> {
+    pub fn analyze_document(&self, content: &str, _uri: &Url) -> Vec<Diagnostic> {
         let mut diagnostics = Vec::new();
 
-        // 1: lexariel
-        match tokenize(content) {
+        // lexariel
+        match lexariel::tokenize(content) {
             Ok(tokens) => {
-                // 2: parseid
-                match parse(tokens) {
+                // parseid
+                match parseid::parse(tokens) {
                     Ok(_ast) => {
                         // success - no syntax errors
                         // TODO: semantic validation here later
@@ -35,16 +33,17 @@ impl SemanticAnalyzer {
         diagnostics
     }
 
-    fn lexer_error_to_diagnostic(&self, error: LexerError) -> Diagnostic {
+    fn lexer_error_to_diagnostic(&self, error: lexariel::LexerError) -> Diagnostic {
+        // use default position
         Diagnostic {
             range: Range {
                 start: Position {
-                    line: (error.line().saturating_sub(1)) as u32, // LSP 0-based
-                    character: (error.column().saturating_sub(1)) as u32,
+                    line: 0,
+                    character: 0,
                 },
                 end: Position {
-                    line: (error.line().saturating_sub(1)) as u32,
-                    character: error.column() as u32, // end one character after start
+                    line: 0,
+                    character: 1,
                 },
             },
             severity: Some(DiagnosticSeverity::ERROR),
@@ -58,23 +57,17 @@ impl SemanticAnalyzer {
         }
     }
 
-    fn parser_error_to_diagnostic(&self, error: ParserError) -> Diagnostic {
-        // position from parser error if available
-        let (line, column) = match &error {
-            ParserError::UnexpectedToken { line, column, .. } => (*line, *column),
-            ParserError::UnexpectedEndOfInput { line, column } => (*line, *column),
-            _ => (1, 1), // default position fallback 
-        };
-
+    fn parser_error_to_diagnostic(&self, error: parseid::ParserError) -> Diagnostic {
+        // use default position
         Diagnostic {
             range: Range {
                 start: Position {
-                    line: (line.saturating_sub(1)) as u32,
-                    character: (column.saturating_sub(1)) as u32,
+                    line: 0,
+                    character: 0,
                 },
                 end: Position {
-                    line: (line.saturating_sub(1)) as u32,
-                    character: column as u32,
+                    line: 0,
+                    character: 1,
                 },
             },
             severity: Some(DiagnosticSeverity::ERROR),
