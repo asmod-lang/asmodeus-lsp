@@ -1,4 +1,3 @@
-use serde::{Deserialize, Serialize};
 use tower_lsp::lsp_types::*;
 
 #[derive(Debug, Clone)]
