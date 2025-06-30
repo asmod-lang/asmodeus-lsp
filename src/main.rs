@@ -46,6 +46,13 @@ impl LanguageServer for AsmodeusLanguageServer {
                 text_document_sync: Some(TextDocumentSyncCapability::Kind(
                     TextDocumentSyncKind::FULL,
                 )),
+                completion_provider: Some(CompletionOptions {
+                    resolve_provider: Some(false),
+                    trigger_characters: Some(vec![".".to_string(), ":".to_string()]),
+                    work_done_progress_options: Default::default(),
+                    all_commit_characters: None,
+                    completion_item: None,
+                }),
                 ..Default::default()
             },
             ..Default::default()
@@ -56,6 +63,23 @@ impl LanguageServer for AsmodeusLanguageServer {
         self.client
             .log_message(MessageType::INFO, "Asmodeus LSP Server initialized!")
             .await;
+    }
+
+    async fn completion(&self, params: CompletionParams) -> LspResult<Option<CompletionResponse>> {
+        let uri = &params.text_document_position.text_document.uri;
+        let position = params.text_document_position.position;
+
+        // document content
+        let document = match self.documents.get(uri) {
+            Some(doc) => doc,
+            None => {
+                return Ok(None);
+            }
+        };
+
+        let completions = self.analyzer.get_completions(&document.content, position);
+
+        Ok(Some(CompletionResponse::Array(completions)))
     }
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
@@ -103,7 +127,6 @@ impl LanguageServer for AsmodeusLanguageServer {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Initialize logging
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()

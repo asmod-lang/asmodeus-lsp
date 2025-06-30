@@ -33,26 +33,194 @@ impl SemanticAnalyzer {
         diagnostics
     }
 
+    pub fn get_completions(&self, content: &str, position: Position) -> Vec<CompletionItem> {
+        let mut completions = Vec::new();
+
+        // empty content 
+        if content.is_empty() {
+            completions.extend(self.get_instruction_completions());
+            return completions;
+        }
+
+        // current line content for context analysis
+        let lines: Vec<&str> = content.lines().collect();
+        
+        if position.line as usize >= lines.len() {
+            // position is beyond existing lines - suggest instructions for new line
+            completions.extend(self.get_instruction_completions());
+            return completions;
+        }
+
+        let current_line = lines[position.line as usize];
+        let cursor_pos = position.character as usize;
+        
+        // get text before cursor for context
+        let text_before_cursor = if cursor_pos <= current_line.len() {
+            &current_line[..cursor_pos]
+        } else {
+            current_line
+        };
+
+        let completion_context = self.analyze_completion_context(text_before_cursor);
+
+        match completion_context {
+            CompletionContext::Instruction => {
+                completions.extend(self.get_instruction_completions());
+            }
+            CompletionContext::Operand => {
+                completions.extend(self.get_operand_completions(content));
+            }
+            CompletionContext::Label => {
+                completions.extend(self.get_label_completions(content));
+            }
+            CompletionContext::Unknown => {
+                // default
+                completions.extend(self.get_instruction_completions());
+            }
+        }
+
+        completions
+}
+
+    fn analyze_completion_context(&self, text_before_cursor: &str) -> CompletionContext {
+        let trimmed = text_before_cursor.trim();
+        
+        // line is empty or ends with label: -> suggest instructions
+        if trimmed.is_empty() || trimmed.ends_with(':') {
+            return CompletionContext::Instruction;
+        }
+
+        // after an instruction -> suggest operands
+        let words: Vec<&str> = trimmed.split_whitespace().collect();
+        if words.len() >= 1 {
+            let first_word = words[0];
+            if self.is_valid_instruction(first_word) && words.len() == 1 {
+                return CompletionContext::Operand;
+            }
+        }
+
+        // in the middle of typing something -> check context
+        if trimmed.chars().all(|c| c.is_uppercase() || c == '_') {
+            return CompletionContext::Instruction;
+        }
+
+        CompletionContext::Unknown
+    }
+
+    fn get_instruction_completions(&self) -> Vec<CompletionItem> {
+        let instructions = [
+            // Arithmetic instructions
+            ("DOD", "Add", "DOD ${1:operand}", "Add value to accumulator: (AK) + (operand) → AK"),
+            ("ODE", "Subtract", "ODE ${1:operand}", "Subtract value from accumulator: (AK) - (operand) → AK"),
+            
+            // Memory instructions
+            ("POB", "Load", "POB ${1:operand}", "Load value into accumulator: (operand) → AK"),
+            ("ŁAD", "Store", "ŁAD ${1:address}", "Store accumulator to memory: (AK) → (address)"),
+            
+            // Control flow instructions
+            ("SOB", "Jump", "SOB ${1:label}", "Unconditional jump to label"),
+            ("SOM", "Jump if negative", "SOM ${1:label}", "Jump to label if AK < 0"),
+            ("SOZ", "Jump if zero", "SOZ ${1:label}", "Jump to label if AK = 0"),
+            ("STP", "Stop", "STP", "Stop program execution"),
+            
+            // Stack instructions
+            ("SDP", "Push", "SDP", "Push accumulator to stack: (AK) → stack"),
+            ("PZS", "Pop", "PZS", "Pop from stack to accumulator: stack → AK"),
+            
+            // Interrupt instructions
+            ("DNS", "Disable interrupts", "DNS", "Disable interrupt handling"),
+            ("CZM", "Clear interrupt mask", "CZM", "Clear interrupt mask register"),
+            ("MSK", "Set interrupt mask", "MSK ${1:mask}", "Set interrupt mask register"),
+            ("PWR", "Return from interrupt", "PWR", "Return from interrupt handler"),
+            
+            // I/O instructions
+            ("WEJSCIE", "Input", "WEJSCIE", "Input value from user"),
+            ("WYJSCIE", "Output", "WYJSCIE", "Output accumulator value"),
+        ];
+
+        let mut completions = Vec::new();
+
+        for (name, kind, snippet, description) in instructions {
+            completions.push(CompletionItem {
+                label: name.to_string(),
+                kind: Some(CompletionItemKind::KEYWORD),
+                detail: Some(kind.to_string()),
+                documentation: Some(Documentation::String(description.to_string())),
+                insert_text: Some(snippet.to_string()),
+                insert_text_format: Some(InsertTextFormat::SNIPPET),
+                sort_text: Some(format!("1_{}", name)), // priority sorting
+                ..Default::default()
+            });
+        }
+
+        // Extended instructions
+        let extended_instructions = [
+            ("MNO", "Multiply", "MNO ${1:operand}", "Multiply: (AK) * (operand) → AK [Extended]"),
+            ("DZI", "Divide", "DZI ${1:operand}", "Divide: (AK) / (operand) → AK [Extended]"),
+            ("MOD", "Modulo", "MOD ${1:operand}", "Modulo: (AK) % (operand) → AK [Extended]"),
+        ];
+
+        for (name, kind, snippet, description) in extended_instructions {
+            completions.push(CompletionItem {
+                label: format!("{} (Extended)", name),
+                kind: Some(CompletionItemKind::KEYWORD),
+                detail: Some(kind.to_string()),
+                documentation: Some(Documentation::String(description.to_string())),
+                insert_text: Some(snippet.to_string()),
+                insert_text_format: Some(InsertTextFormat::SNIPPET),
+                sort_text: Some(format!("2_{}", name)), // lower priority
+                ..Default::default()
+            });
+        }
+
+        completions
+    }
+
+    fn get_operand_completions(&self, _content: &str) -> Vec<CompletionItem> {
+        vec![
+            CompletionItem {
+                label: "#immediate".to_string(),
+                kind: Some(CompletionItemKind::CONSTANT),
+                detail: Some("Immediate value".to_string()),
+                documentation: Some(Documentation::String("Use immediate value (e.g., #42, #0xFF)".to_string())),
+                insert_text: Some("#${1:value}".to_string()),
+                insert_text_format: Some(InsertTextFormat::SNIPPET),
+                ..Default::default()
+            },
+            // TODO: label completions
+        ]
+    }
+
+    fn get_label_completions(&self, _content: &str) -> Vec<CompletionItem> {
+        // TODO: parsing content for existing labels
+        Vec::new()
+    }
+
+    fn is_valid_instruction(&self, word: &str) -> bool {
+        let valid_instructions = [
+            "DOD", "ODE", "LAD", "POB", "SOB", "SOM", "STP", 
+            "DNS", "PZS", "SDP", "CZM", "MSK", "PWR", 
+            "WEJSCIE", "WYJSCIE", "SOZ", "MNO", "DZI", "MOD"
+        ];
+        valid_instructions.contains(&word)
+    }
+
     fn validate_semantics(&self, ast: &parseid::Program) -> Vec<Diagnostic> {
         let mut diagnostics = Vec::new();
 
         for element in &ast.elements {
             match element {
                 parseid::ProgramElement::Instruction(instruction) => {
-                    // instruction is valid?
                     if let Err(diagnostic) = self.validate_instruction(instruction) {
                         diagnostics.push(diagnostic);
                     }
                 }
                 parseid::ProgramElement::MacroCall(macro_call) => {
-                    // invalid instruction being parsed as macro?
                     if let Err(diagnostic) = self.validate_macro_call(macro_call) {
                         diagnostics.push(diagnostic);
                     }
                 }
-                _ => {
-                    // other elements (labels, data) are fine for now
-                }
+                _ => {}
             }
         }
 
@@ -60,7 +228,6 @@ impl SemanticAnalyzer {
     }
 
     fn validate_instruction(&self, instruction: &parseid::Instruction) -> Result<(), Diagnostic> {
-        // instruction opcode
         let opcode_str = &instruction.opcode;
         
         let valid_instructions = [
@@ -96,10 +263,8 @@ impl SemanticAnalyzer {
     }
 
     fn validate_macro_call(&self, macro_call: &parseid::MacroCall) -> Result<(), Diagnostic> {
-        // assume all macro calls that look like instructions are invalid
         let name = &macro_call.name;
         
-        // if it looks like an instruction but isnt valid -> report error
         if name.chars().all(|c| c.is_uppercase() || c == '_') {
             return Err(Diagnostic {
                 range: Range {
@@ -161,6 +326,14 @@ impl SemanticAnalyzer {
     }
 }
 
+#[derive(Debug, Clone)]
+enum CompletionContext {
+    Instruction,
+    Operand,
+    Label,
+    Unknown,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -201,11 +374,30 @@ start:
     fn test_definitely_invalid_syntax() {
         let analyzer = SemanticAnalyzer::new();
         
-        // that should definitely fail at lexer level
         let content = "@@@ invalid content $$$";
         let uri = Url::parse("file:///test.asmod").unwrap();
         let diagnostics = analyzer.analyze_document(content, &uri);
         
         assert!(!diagnostics.is_empty(), "Definitely invalid syntax should produce diagnostics");
+    }
+
+    #[test]
+    fn test_instruction_completions() {
+        let analyzer = SemanticAnalyzer::new();
+        let content = "";
+        let position = Position { line: 0, character: 0 };
+
+        let completions = analyzer.get_completions(content, position);
+
+        assert!(!completions.is_empty(), "Should return instruction completions");
+
+        // if common instructions are present
+        let instruction_names: Vec<&str> = completions.iter()
+            .map(|c| c.label.as_str())
+            .collect();
+
+        assert!(instruction_names.iter().any(|&name| name.contains("POB")));
+        assert!(instruction_names.iter().any(|&name| name.contains("DOD")));
+        assert!(instruction_names.iter().any(|&name| name.contains("STP")));
     }
 }
