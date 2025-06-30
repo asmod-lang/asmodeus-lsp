@@ -1,6 +1,36 @@
 [package]
 name = "asmodeus-lsp"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
+authors = ["Szymon Wilczek"]
+description = "Language Server Protocol implementation for Asmodeus Machine W assembly"
+license = "MIT"
+repository = "https://github.com/szymonwilczek/asmodeus-lsp"
+keywords = ["lsp", "language-server", "assembly", "machine-w", "asmodeus"]
+categories = ["development-tools", "compilers"]
+
+[[bin]]
+name = "asmodeus-lsp"
+path = "src/main.rs"
 
 [dependencies]
+lexariel = "0.1.0"
+parseid = "0.1.0"
+asmodeus_shared = "0.1.0"
+
+tower-lsp = "0.20"
+tokio = { version = "1.0", features = ["rt-multi-thread", "macros", "io-std"] }
+
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+anyhow = "1.0"
+thiserror = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+dashmap = "5.5"
+url = "2.5"
+
+[dev-dependencies]
+tokio-test = "0.4"
+tempfile = "3.8"
