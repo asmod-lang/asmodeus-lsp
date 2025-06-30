@@ -13,6 +13,10 @@ categories = ["development-tools", "compilers"]
 name = "asmodeus-lsp"
 path = "src/main.rs"
 
+[lib]
+name = "asmodeus_lsp"
+path = "src/lib.rs"
+
 [dependencies]
 lexariel = "0.1.0"
 parseid = "0.1.0"
