@@ -77,11 +77,24 @@ impl LanguageServer for AsmodeusLanguageServer {
             ..Default::default()
         })
     ),
+            code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
             ..Default::default()
         },
             ..Default::default()
         })
     }
+
+async fn code_action(&self, params: CodeActionParams) -> tower_lsp::jsonrpc::Result<Option<CodeActionResponse>> {
+    let uri = &params.text_document.uri;
+    let range = params.range;
+
+    if let Some(document) = self.documents.get(uri) {
+        let actions = self.analyzer.get_code_actions(&document.content, range, uri, &params.context);
+        return Ok(Some(actions));
+    }
+
+    Ok(None)
+}
 
 async fn semantic_tokens_full(&self, params: SemanticTokensParams) -> tower_lsp::jsonrpc::Result<Option<SemanticTokensResult>> {
     let uri = &params.text_document.uri;

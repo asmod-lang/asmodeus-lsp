@@ -1,4 +1,5 @@
 use tower_lsp::lsp_types::*;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 struct RawSemanticToken {
@@ -746,6 +747,245 @@ fn encode_semantic_tokens(&self, tokens: Vec<RawSemanticToken>) -> Vec<SemanticT
     encoded
 }
 
+
+pub fn get_code_actions(&self, content: &str, range: Range, uri: &Url, context: &CodeActionContext) -> Vec<CodeActionOrCommand> {
+    let mut actions = Vec::new();
+    
+    // quick fixes for diagnostics
+    for diagnostic in &context.diagnostics {
+        if let Some(action) = self.create_quick_fix(diagnostic, content, uri) {
+            actions.push(action);
+        }
+    }
+    
+    actions.extend(self.get_refactoring_actions(content, range, uri));
+    
+    actions
+}
+
+fn create_quick_fix(&self, diagnostic: &Diagnostic, content: &str, uri: &Url) -> Option<CodeActionOrCommand> {
+    // unknown instruction errors
+    if diagnostic.message.contains("Unknown instruction") {
+        return self.suggest_instruction_correction(diagnostic, content, uri);
+    }
+    
+    // undefined macro errors  
+    if diagnostic.message.contains("undefined macro") {
+        return self.suggest_instruction_correction(diagnostic, content, uri);
+    }
+    
+    None
+}
+
+fn suggest_instruction_correction(&self, diagnostic: &Diagnostic, content: &str, uri: &Url) -> Option<CodeActionOrCommand> {
+    // unknown instruction from diagnostic message
+    let message = &diagnostic.message;
+    let start_quote = message.find('\'')?;
+    let end_quote = message.rfind('\'')?;
+    if start_quote >= end_quote {
+        return None;
+    }
+    
+    let unknown_instruction = &message[start_quote + 1..end_quote];
+    
+    // similar instructions
+    let suggestions = self.find_similar_instructions(unknown_instruction);
+    
+    if let Some(suggestion) = suggestions.first() {
+        let edit = TextEdit {
+            range: diagnostic.range,
+            new_text: suggestion.clone(),
+        };
+        
+        let mut changes = HashMap::new();
+        changes.insert(uri.clone(), vec![edit]);
+        
+        return Some(CodeActionOrCommand::CodeAction(CodeAction {
+            title: format!("Replace with '{}'", suggestion),
+            kind: Some(CodeActionKind::QUICKFIX),
+            diagnostics: Some(vec![diagnostic.clone()]),
+            edit: Some(WorkspaceEdit {
+                changes: Some(changes),
+                document_changes: None,
+                change_annotations: None,
+            }),
+            command: None,
+            is_preferred: Some(true),
+            disabled: None,
+            data: None,
+        }));
+    }
+    
+    None
+}
+
+fn find_similar_instructions(&self, unknown: &str) -> Vec<String> {
+    let valid_instructions = [
+        "DOD", "ODE", "ŁAD", "POB", "SOB", "SOM", "STP", 
+        "DNS", "PZS", "SDP", "CZM", "MSK", "PWR", 
+        "WEJSCIE", "WYJSCIE", "SOZ", "MNO", "DZI", "MOD"
+    ];
+    
+    let mut suggestions = Vec::new();
+    
+    // instructions with similar spelling (levenshtein)
+    for &instruction in &valid_instructions {
+        let distance = self.levenshtein_distance(unknown.to_uppercase().as_str(), instruction);
+        if distance <= 2 { // 2 character differences
+            suggestions.push(instruction.to_string());
+        }
+    }
+    
+    // similarity (distance)
+    suggestions.sort_by_key(|s| self.levenshtein_distance(unknown.to_uppercase().as_str(), s));
+    
+    suggestions
+}
+
+fn levenshtein_distance(&self, a: &str, b: &str) -> usize {
+    let a_chars: Vec<char> = a.chars().collect();
+    let b_chars: Vec<char> = b.chars().collect();
+    let a_len = a_chars.len();
+    let b_len = b_chars.len();
+    
+    let mut matrix = vec![vec![0; b_len + 1]; a_len + 1];
+    
+    // first row and column
+    for i in 0..=a_len {
+        matrix[i][0] = i;
+    }
+    for j in 0..=b_len {
+        matrix[0][j] = j;
+    }
+    
+    // matrix
+    for i in 1..=a_len {
+        for j in 1..=b_len {
+            let cost = if a_chars[i - 1] == b_chars[j - 1] { 0 } else { 1 };
+            matrix[i][j] = std::cmp::min(
+                std::cmp::min(
+                    matrix[i - 1][j] + 1,     // deletion
+                    matrix[i][j - 1] + 1      // insertion
+                ),
+                matrix[i - 1][j - 1] + cost   // substitution
+            );
+        }
+    }
+    
+    matrix[a_len][b_len]
+}
+
+fn get_refactoring_actions(&self, content: &str, range: Range, uri: &Url) -> Vec<CodeActionOrCommand> {
+    let mut actions = Vec::new();
+    
+    // "Convert to uppercase" 
+    if let Some(action) = self.create_uppercase_action(content, range, uri) {
+        actions.push(action);
+    }
+    
+    // "Add comment" 
+    if let Some(action) = self.create_add_comment_action(content, range, uri) {
+        actions.push(action);
+    }
+    
+    actions
+}
+
+fn create_uppercase_action(&self, content: &str, range: Range, uri: &Url) -> Option<CodeActionOrCommand> {
+    let lines: Vec<&str> = content.lines().collect();
+    let line_num = range.start.line as usize;
+    
+    if line_num >= lines.len() {
+        return None;
+    }
+    
+    let line = lines[line_num];
+    let start_char = range.start.character as usize;
+    let end_char = range.end.character as usize;
+    
+    if start_char >= line.len() || end_char > line.len() {
+        return None;
+    }
+    
+    let selected_text = &line[start_char..end_char];
+    
+    // lowercase instruction
+    if self.is_valid_instruction(&selected_text.to_uppercase()) && selected_text != selected_text.to_uppercase() {
+        let edit = TextEdit {
+            range,
+            new_text: selected_text.to_uppercase(),
+        };
+        
+        let mut changes = HashMap::new();
+        changes.insert(uri.clone(), vec![edit]);
+        
+        return Some(CodeActionOrCommand::CodeAction(CodeAction {
+            title: "Convert to uppercase".to_string(),
+            kind: Some(CodeActionKind::REFACTOR),
+            diagnostics: None,
+            edit: Some(WorkspaceEdit {
+                changes: Some(changes),
+                document_changes: None,
+                change_annotations: None,
+            }),
+            command: None,
+            is_preferred: Some(false),
+            disabled: None,
+            data: None,
+        }));
+    }
+    
+    None
+}
+
+fn create_add_comment_action(&self, content: &str, range: Range, uri: &Url) -> Option<CodeActionOrCommand> {
+    let lines: Vec<&str> = content.lines().collect();
+    let line_num = range.start.line as usize;
+    
+    if line_num >= lines.len() {
+        return None;
+    }
+    
+    let line = lines[line_num];
+    
+    // add comment if line doesnt have one
+    if !line.contains(';') && !line.trim().is_empty() {
+        let edit = TextEdit {
+            range: Range {
+                start: Position {
+                    line: range.start.line,
+                    character: line.len() as u32,
+                },
+                end: Position {
+                    line: range.start.line,
+                    character: line.len() as u32,
+                },
+            },
+            new_text: "    ; TODO: Add comment".to_string(),
+        };
+        
+        let mut changes = HashMap::new();
+        changes.insert(uri.clone(), vec![edit]);
+        
+        return Some(CodeActionOrCommand::CodeAction(CodeAction {
+            title: "Add comment".to_string(),
+            kind: Some(CodeActionKind::REFACTOR),
+            diagnostics: None,
+            edit: Some(WorkspaceEdit {
+                changes: Some(changes),
+                document_changes: None,
+                change_annotations: None,
+            }),
+            command: None,
+            is_preferred: Some(false),
+            disabled: None,
+            data: None,
+        }));
+    }
+    
+    None
+}
+
 }
 
 #[derive(Debug, Clone)]
@@ -890,6 +1130,35 @@ fn test_semantic_tokens() {
     let tokens = analyzer.get_semantic_tokens(content);
     
     assert!(!tokens.is_empty(), "Should generate semantic tokens");
+}
+
+#[test]
+fn test_code_actions_instruction_suggestion() {
+    let analyzer = SemanticAnalyzer::new();
+    let content = "DOX #42"; // typo in DOD
+    let uri = Url::parse("file:///test.asmod").unwrap();
+    
+    // diagnostic for unknown instruction
+    let diagnostic = Diagnostic {
+        range: Range {
+            start: Position { line: 0, character: 0 },
+            end: Position { line: 0, character: 3 },
+        },
+        severity: Some(DiagnosticSeverity::ERROR),
+        message: "Unknown instruction: 'DOX'".to_string(),
+        source: Some("asmodeus-lsp".to_string()),
+        ..Default::default()
+    };
+    
+    let context = CodeActionContext {
+        diagnostics: vec![diagnostic],
+        only: None,
+        trigger_kind: None,
+    };
+    
+    let actions = analyzer.get_code_actions(content, Range::default(), &uri, &context);
+    
+    assert!(!actions.is_empty(), "Should suggest code actions for typos");
 }
 
 }
