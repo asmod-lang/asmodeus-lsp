@@ -572,10 +572,10 @@ pub fn get_document_symbols(&self, content: &str) -> Vec<SymbolInformation> {
         // labels
         if let Some(colon_pos) = trimmed.find(':') {
             let label_name = &trimmed[..colon_pos];
-            if !label_name.is_empty() && label_name.chars().all(|c| self.is_word_char(c)) {
+            if !label_name.is_empty() && self.is_valid_symbol_name(label_name) {
                 symbols.push(SymbolInformation {
                     name: label_name.to_string(),
-                    kind: SymbolKind::FUNCTION, // as functions
+                    kind: SymbolKind::FUNCTION,
                     tags: None,
                     deprecated: None,
                     location: Location {
@@ -583,11 +583,11 @@ pub fn get_document_symbols(&self, content: &str) -> Vec<SymbolInformation> {
                         range: Range {
                             start: Position {
                                 line: line_num as u32,
-                                character: 0,
+                                character: (line.len() - trimmed.len()) as u32, // for leading whitespace
                             },
                             end: Position {
                                 line: line_num as u32,
-                                character: trimmed.len() as u32,
+                                character: (line.len() - trimmed.len() + colon_pos) as u32,
                             },
                         },
                     },
@@ -595,9 +595,53 @@ pub fn get_document_symbols(&self, content: &str) -> Vec<SymbolInformation> {
                 });
             }
         }
+        
+        // instructions for better symbol extraction
+        let words: Vec<&str> = trimmed.split_whitespace().collect();
+        if !words.is_empty() {
+            let first_word = words[0];
+            if self.is_valid_instruction(first_word) {
+                // add instruction symbols here
+            }
+        }
     }
     
     symbols
+}
+
+pub fn get_rename_range(&self, content: &str, position: Position) -> Option<Range> {
+    let lines: Vec<&str> = content.lines().collect();
+    
+    if position.line as usize >= lines.len() {
+        return None;
+    }
+
+    let current_line = lines[position.line as usize];
+    let cursor_pos = position.character as usize;
+
+    let word_info = self.get_word_at_position(current_line, cursor_pos)?;
+    let (word, start_pos, end_pos) = word_info;
+    
+    // Only allow renaming of labels (not instructions)
+    if self.is_valid_instruction(&word) {
+        return None;
+    }
+    
+    // Check if it's a renameable symbol
+    if self.is_valid_symbol_name(&word) {
+        Some(Range {
+            start: Position {
+                line: position.line,
+                character: start_pos as u32,
+            },
+            end: Position {
+                line: position.line,
+                character: end_pos as u32,
+            },
+        })
+    } else {
+        None
+    }
 }
 
 
@@ -986,6 +1030,78 @@ fn create_add_comment_action(&self, content: &str, range: Range, uri: &Url) -> O
     None
 }
 
+
+pub fn rename_symbol(&self, content: &str, position: Position, new_name: &str, uri: &Url) -> Option<WorkspaceEdit> {
+    let lines: Vec<&str> = content.lines().collect();
+    
+    if position.line as usize >= lines.len() {
+        return None;
+    }
+
+    let current_line = lines[position.line as usize];
+    let cursor_pos = position.character as usize;
+
+    // symbol at cursor position
+    let word_info = self.get_word_at_position(current_line, cursor_pos)?;
+    let (old_name, _, _) = word_info;
+    
+    if !self.is_valid_symbol_name(new_name) {
+        return None;
+    }
+    
+    let references = self.find_references(content, position, uri, true);
+    
+    if references.is_empty() {
+        return None;
+    }
+    
+    // text edits for all references
+    let mut edits = Vec::new();
+    for reference in references {
+        // label definitions
+        let edit_text = if self.is_label_definition_location(content, &reference) {
+            format!("{}:", new_name)
+        } else {
+            new_name.to_string()
+        };
+        
+        edits.push(TextEdit {
+            range: reference.range,
+            new_text: edit_text,
+        });
+    }
+    
+    let mut changes = HashMap::new();
+    changes.insert(uri.clone(), edits);
+    
+    Some(WorkspaceEdit {
+        changes: Some(changes),
+        document_changes: None,
+        change_annotations: None,
+    })
+}
+
+fn is_valid_symbol_name(&self, name: &str) -> bool {
+    !name.is_empty() && 
+    name.chars().all(|c| c.is_alphanumeric() || c == '_') &&
+    !name.chars().next().unwrap().is_ascii_digit()
+}
+
+fn is_label_definition_location(&self, content: &str, location: &Location) -> bool {
+    let lines: Vec<&str> = content.lines().collect();
+    let line_num = location.range.start.line as usize;
+    
+    if line_num >= lines.len() {
+        return false;
+    }
+    
+    let line = lines[line_num];
+    let end_char = location.range.end.character as usize;
+    
+    // colon after the symbol
+    line.chars().nth(end_char) == Some(':')
+}
+
 }
 
 #[derive(Debug, Clone)]
@@ -1159,6 +1275,63 @@ fn test_code_actions_instruction_suggestion() {
     let actions = analyzer.get_code_actions(content, Range::default(), &uri, &context);
     
     assert!(!actions.is_empty(), "Should suggest code actions for typos");
+}
+
+
+#[test]
+fn test_rename_symbol() {
+    let analyzer = SemanticAnalyzer::new();
+    let content = r#"start:
+    POB #42
+    SOB start"#;
+    let position = Position { line: 0, character: 0 }; // 'start'
+    let uri = Url::parse("file:///test.asmod").unwrap();
+    
+    let edit = analyzer.rename_symbol(content, position, "begin", &uri);
+    
+    assert!(edit.is_some(), "Should create rename edit");
+    
+    let edit = edit.unwrap();
+    let changes = edit.changes.unwrap();
+    let file_edits = changes.get(&uri).unwrap();
+    
+    assert_eq!(file_edits.len(), 2, "Should rename definition and reference");
+}
+
+#[test]
+fn test_workspace_symbols_filtering() {
+    let analyzer = SemanticAnalyzer::new();
+    let content = r#"start:
+    POB #42
+loop:
+    SOB start"#;
+    
+    let symbols = analyzer.get_document_symbols(content);
+    
+    // filtering (simulate workspace symbol search)
+    let filtered: Vec<_> = symbols.iter()
+        .filter(|s| s.name.contains("sta"))
+        .collect();
+    
+    assert_eq!(filtered.len(), 1, "Should find 'start' when searching for 'sta'");
+    assert_eq!(filtered[0].name, "start");
+}
+
+#[test]
+fn test_prepare_rename() {
+    let analyzer = SemanticAnalyzer::new();
+    let content = "start:\n    POB #42";
+    let position = Position { line: 0, character: 2 }; // 'start'
+    
+    let range = analyzer.get_rename_range(content, position);
+    
+    assert!(range.is_some(), "Should allow renaming labels");
+    
+    // instruction (should not be renameable)
+    let position = Position { line: 1, character: 4 }; // 'POB'
+    let range = analyzer.get_rename_range(content, position);
+    
+    assert!(range.is_none(), "Should not allow renaming instructions");
 }
 
 }

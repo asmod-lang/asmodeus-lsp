@@ -78,11 +78,62 @@ impl LanguageServer for AsmodeusLanguageServer {
         })
     ),
             code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
+            workspace_symbol_provider: Some(OneOf::Left(true)),
+            rename_provider: Some(OneOf::Left(true)),
             ..Default::default()
         },
             ..Default::default()
         })
     }
+
+
+async fn symbol(&self, params: WorkspaceSymbolParams) -> tower_lsp::jsonrpc::Result<Option<Vec<SymbolInformation>>> {
+    let query = &params.query;
+    let mut all_symbols = Vec::new();
+    
+    // all open documents
+    for document_ref in self.documents.iter() {
+        let (uri_key, document) = document_ref.pair();
+        let uri = uri_key.clone();
+        
+        let mut symbols = self.analyzer.get_document_symbols(&document.content);
+        
+        // symbols by query and update URIs
+        for symbol in &mut symbols {
+            if symbol.name.to_lowercase().contains(&query.to_lowercase()) {
+                symbol.location.uri = uri.clone();
+                all_symbols.push(symbol.clone());
+            }
+        }
+    }
+    
+    Ok(Some(all_symbols))
+}
+
+async fn prepare_rename(&self, params: TextDocumentPositionParams) -> tower_lsp::jsonrpc::Result<Option<PrepareRenameResponse>> {
+    let uri = &params.text_document.uri;
+    let position = params.position;
+    
+    if let Some(document) = self.documents.get(uri) {
+        let range = self.analyzer.get_rename_range(&document.content, position);
+        return Ok(range.map(PrepareRenameResponse::Range));
+    }
+    
+    Ok(None)
+}
+
+async fn rename(&self, params: RenameParams) -> tower_lsp::jsonrpc::Result<Option<WorkspaceEdit>> {
+    let uri = &params.text_document_position.text_document.uri;
+    let position = params.text_document_position.position;
+    let new_name = &params.new_name;
+    
+    if let Some(document) = self.documents.get(uri) {
+        let edit = self.analyzer.rename_symbol(&document.content, position, new_name, uri);
+        return Ok(edit);
+    }
+    
+    Ok(None)
+}
 
 async fn code_action(&self, params: CodeActionParams) -> tower_lsp::jsonrpc::Result<Option<CodeActionResponse>> {
     let uri = &params.text_document.uri;
