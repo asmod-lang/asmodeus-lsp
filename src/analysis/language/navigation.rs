@@ -71,7 +71,7 @@ impl NavigationProvider {
             if line_num >= lines.len() {
                 continue;
             }
-
+            
             let line = lines[line_num];
             
             if !is_whole_word_match(line, start_pos, &word) {
@@ -83,7 +83,7 @@ impl NavigationProvider {
                 continue;
             }
 
-            locations.push(create_word_location(uri, line_num, start_pos, word.len()));
+            locations.push(coordinates_to_location(uri, line_num, start_pos, end_pos));
         }
 
         locations
