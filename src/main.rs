@@ -57,11 +57,45 @@ impl LanguageServer for AsmodeusLanguageServer {
             definition_provider: Some(OneOf::Left(true)),
             references_provider: Some(OneOf::Left(true)),
             document_symbol_provider: Some(OneOf::Left(true)),
+            semantic_tokens_provider: Some( 
+                SemanticTokensServerCapabilities::SemanticTokensOptions(SemanticTokensOptions {
+                    legend: SemanticTokensLegend {
+                    token_types: vec![
+                        SemanticTokenType::KEYWORD,      // instructions
+                        SemanticTokenType::FUNCTION,     // labels
+                        SemanticTokenType::NUMBER,       // numbers
+                        SemanticTokenType::OPERATOR,     // operators (#, [, ])
+                        SemanticTokenType::COMMENT,      // comments
+                        SemanticTokenType::STRING,       // strings
+                ],
+                    token_modifiers: vec![
+                        SemanticTokenModifier::DEPRECATED, // not used
+                ],
+            },
+                range: Some(true),
+                full: Some(SemanticTokensFullOptions::Bool(true)),
+            ..Default::default()
+        })
+    ),
             ..Default::default()
         },
             ..Default::default()
         })
     }
+
+async fn semantic_tokens_full(&self, params: SemanticTokensParams) -> tower_lsp::jsonrpc::Result<Option<SemanticTokensResult>> {
+    let uri = &params.text_document.uri;
+
+    if let Some(document) = self.documents.get(uri) {
+        let tokens = self.analyzer.get_semantic_tokens(&document.content);
+        return Ok(Some(SemanticTokensResult::Tokens(SemanticTokens {
+            result_id: None,
+            data: tokens,
+        })));
+    }
+
+    Ok(None)
+}
 
 async fn references(&self, params: ReferenceParams) -> tower_lsp::jsonrpc::Result<Option<Vec<Location>>> {
     let uri = &params.text_document_position.text_document.uri;
