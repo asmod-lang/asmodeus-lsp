@@ -1,5 +1,5 @@
 use tower_lsp::lsp_types::*;
-use crate::analysis::utils::{InstructionDatabase, is_word_char, could_be_label, classify_token};
+use crate::analysis::utils::{InstructionDatabase, is_word_char, could_be_label};
 
 #[derive(Debug, Clone)]
 struct RawSemanticToken {
