@@ -187,11 +187,23 @@ impl SignatureHelpProvider {
     fn get_active_parameter(&self, text_before_cursor: &str, instruction: &str) -> Option<u32> {
         let words: Vec<&str> = text_before_cursor.split_whitespace().collect();
         
-        // instruction + at least 1 space -> parameter mode
-        if words.len() >= 2 || (words.len() == 1 && text_before_cursor.ends_with(' ')) {
-            Some(0) // first parameter
+        if let Some(instruction_info) = self.instruction_db.get_instruction(instruction) {
+            match instruction_info.operand_type {
+                crate::analysis::utils::OperandType::None => {
+                    // STP like
+                    return None;
+                },
+                _ => {
+                    // instruction + at least 1 space -> parameter mode
+                    if words.len() >= 2 || (words.len() == 1 && text_before_cursor.ends_with(' ')) {
+                        Some(0) // first parameter
+                    } else {
+                        None // still instruction
+                    }
+                }
+            }
         } else {
-            None // still instruction
+            None
         }
     }
 }
