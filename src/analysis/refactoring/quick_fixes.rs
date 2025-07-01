@@ -26,7 +26,7 @@ impl QuickFixProvider {
         None
     }
 
-    fn suggest_instruction_correction(&self, diagnostic: &Diagnostic, content: &str, uri: &Url) -> Option<CodeActionOrCommand> {
+    fn suggest_instruction_correction(&self, diagnostic: &Diagnostic, _content: &str, uri: &Url) -> Option<CodeActionOrCommand> {
         let message = &diagnostic.message;
         let start_quote = message.find('\'')?;
         let end_quote = message.rfind('\'')?;
