@@ -472,6 +472,124 @@ fn get_instruction_info(&self, word: &str) -> Option<String> {
     }
 }
 
+pub fn find_references(&self, content: &str, position: Position, uri: &Url, include_declaration: bool) -> Vec<Location> {
+    let mut locations = Vec::new();
+    let lines: Vec<&str> = content.lines().collect();
+    
+    if position.line as usize >= lines.len() {
+        return locations;
+    }
+
+    let current_line = lines[position.line as usize];
+    let cursor_pos = position.character as usize;
+
+    let word_info = match self.get_word_at_position(current_line, cursor_pos) {
+        Some(info) => info,
+        None => return locations,
+    };
+    let (word, _, _) = word_info;
+
+    // all occurrences of this symbol
+    for (line_num, line) in lines.iter().enumerate() {
+        let mut search_pos = 0;
+        while let Some(pos) = line[search_pos..].find(&word) {
+            let actual_pos = search_pos + pos;
+            
+            // whole word match
+            if self.is_whole_word_match(line, actual_pos, &word) {
+                // skip declaration if not requested
+                if !include_declaration && self.is_label_declaration(line, actual_pos, &word) {
+                    search_pos = actual_pos + word.len();
+                    continue;
+                }
+
+                locations.push(Location {
+                    uri: uri.clone(),
+                    range: Range {
+                        start: Position {
+                            line: line_num as u32,
+                            character: actual_pos as u32,
+                        },
+                        end: Position {
+                            line: line_num as u32,
+                            character: (actual_pos + word.len()) as u32,
+                        },
+                    },
+                });
+            }
+            search_pos = actual_pos + word.len();
+        }
+    }
+
+    locations
+}
+
+fn is_whole_word_match(&self, line: &str, pos: usize, word: &str) -> bool {
+    let chars: Vec<char> = line.chars().collect();
+    
+    // character before
+    if pos > 0 {
+        if let Some(prev_char) = chars.get(pos - 1) {
+            if self.is_word_char(*prev_char) {
+                return false;
+            }
+        }
+    }
+    
+    // character after
+    let end_pos = pos + word.len();
+    if let Some(next_char) = chars.get(end_pos) {
+        if self.is_word_char(*next_char) {
+            return false;
+        }
+    }
+    
+    true
+}
+
+fn is_label_declaration(&self, line: &str, pos: usize, word: &str) -> bool {
+    let after_word_pos = pos + word.len();
+    line.chars().nth(after_word_pos) == Some(':')
+}
+
+pub fn get_document_symbols(&self, content: &str) -> Vec<SymbolInformation> {
+    let mut symbols = Vec::new();
+    let lines: Vec<&str> = content.lines().collect();
+    
+    for (line_num, line) in lines.iter().enumerate() {
+        let trimmed = line.trim();
+        
+        // labels
+        if let Some(colon_pos) = trimmed.find(':') {
+            let label_name = &trimmed[..colon_pos];
+            if !label_name.is_empty() && label_name.chars().all(|c| self.is_word_char(c)) {
+                symbols.push(SymbolInformation {
+                    name: label_name.to_string(),
+                    kind: SymbolKind::FUNCTION, // as functions
+                    tags: None,
+                    deprecated: None,
+                    location: Location {
+                        uri: Url::parse("file:///dummy").unwrap(),
+                        range: Range {
+                            start: Position {
+                                line: line_num as u32,
+                                character: 0,
+                            },
+                            end: Position {
+                                line: line_num as u32,
+                                character: trimmed.len() as u32,
+                            },
+                        },
+                    },
+                    container_name: None,
+                });
+            }
+        }
+    }
+    
+    symbols
+}
+
 }
 
 #[derive(Debug, Clone)]
@@ -573,4 +691,37 @@ fn test_goto_definition() {
     
     assert!(definition.is_some(), "Should find label definition");
 }
+
+#[test]
+fn test_find_references() {
+    let analyzer = SemanticAnalyzer::new();
+    let content = r#"start:
+    POB #42
+    SOB start
+loop:
+    DOD start
+    SOB loop"#;
+    let position = Position { line: 0, character: 0 }; // na definicji 'start'
+    let uri = Url::parse("file:///test.asmod").unwrap();
+    
+    let references = analyzer.find_references(content, position, &uri, true);
+    
+    assert_eq!(references.len(), 3, "Should find 3 references to 'start'");
+}
+
+#[test]
+fn test_document_symbols() {
+    let analyzer = SemanticAnalyzer::new();
+    let content = r#"start:
+    POB #42
+loop:
+    SOB start"#;
+    
+    let symbols = analyzer.get_document_symbols(content);
+    
+    assert_eq!(symbols.len(), 2, "Should find 2 symbols");
+    assert!(symbols.iter().any(|s| s.name == "start"));
+    assert!(symbols.iter().any(|s| s.name == "loop"));
+}
+
 }

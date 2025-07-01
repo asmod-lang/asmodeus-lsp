@@ -55,11 +55,36 @@ impl LanguageServer for AsmodeusLanguageServer {
             }),
             hover_provider: Some(HoverProviderCapability::Simple(true)),
             definition_provider: Some(OneOf::Left(true)),
+            references_provider: Some(OneOf::Left(true)),
+            document_symbol_provider: Some(OneOf::Left(true)),
             ..Default::default()
         },
             ..Default::default()
         })
     }
+
+async fn references(&self, params: ReferenceParams) -> tower_lsp::jsonrpc::Result<Option<Vec<Location>>> {
+    let uri = &params.text_document_position.text_document.uri;
+    let position = params.text_document_position.position;
+
+    if let Some(document) = self.documents.get(uri) {
+        let references = self.analyzer.find_references(&document.content, position, uri, params.context.include_declaration);
+        return Ok(Some(references));
+    }
+
+    Ok(Some(Vec::new()))
+}
+
+async fn document_symbol(&self, params: DocumentSymbolParams) -> tower_lsp::jsonrpc::Result<Option<DocumentSymbolResponse>> {
+    let uri = &params.text_document.uri;
+
+    if let Some(document) = self.documents.get(uri) {
+        let symbols = self.analyzer.get_document_symbols(&document.content);
+        return Ok(Some(DocumentSymbolResponse::Flat(symbols)));
+    }
+
+    Ok(None)
+}
 
 async fn goto_definition(&self, params: GotoDefinitionParams) -> tower_lsp::jsonrpc::Result<Option<GotoDefinitionResponse>> {
     let uri = &params.text_document_position_params.text_document.uri;
