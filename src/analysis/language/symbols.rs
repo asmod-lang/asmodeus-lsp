@@ -1,5 +1,5 @@
 use tower_lsp::lsp_types::*;
-use crate::analysis::utils::{is_valid_symbol_name, InstructionDatabase, create_location};
+use crate::analysis::utils::{is_valid_symbol_name, InstructionDatabase};
 
 #[derive(Debug)]
 pub struct SymbolProvider {
