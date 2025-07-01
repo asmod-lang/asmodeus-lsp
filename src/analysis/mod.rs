@@ -1,5 +1,7 @@
-pub mod analyzer;
-pub mod document;
+pub mod core;
+pub mod language;
+pub mod refactoring;
+pub mod utils;
 
-pub use analyzer::SemanticAnalyzer;
-pub use document::DocumentState;
+pub use core::{SemanticAnalyzer, DocumentState, DiagnosticsEngine};
+pub use utils::{InstructionDatabase, InstructionInfo, InstructionCategory, OperandType};
