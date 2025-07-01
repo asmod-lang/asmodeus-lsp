@@ -324,6 +324,79 @@ impl SemanticAnalyzer {
             data: None,
         }
     }
+
+pub fn get_hover_info(&self, content: &str, position: Position) -> Option<Hover> {
+    let lines: Vec<&str> = content.lines().collect();
+    
+    if position.line as usize >= lines.len() {
+        return None;
+    }
+
+    let current_line = lines[position.line as usize];
+    let cursor_pos = position.character as usize;
+
+    // word at cursor position
+    let word_info = self.get_word_at_position(current_line, cursor_pos)?;
+    let (word, start_pos, end_pos) = word_info;
+
+    let hover_content = self.get_instruction_info(&word)?;
+
+    Some(Hover {
+        contents: HoverContents::Markup(MarkupContent {
+            kind: MarkupKind::Markdown,
+            value: hover_content,
+        }),
+        range: Some(Range {
+            start: Position {
+                line: position.line,
+                character: start_pos as u32,
+            },
+            end: Position {
+                line: position.line,
+                character: end_pos as u32,
+            },
+        }),
+    })
+}
+
+fn get_word_at_position(&self, line: &str, cursor_pos: usize) -> Option<(String, usize, usize)> {
+    if cursor_pos > line.len() {
+        return None;
+    }
+
+    let chars: Vec<char> = line.chars().collect();
+    
+    let mut start = cursor_pos;
+    while start > 0 && self.is_word_char(chars.get(start - 1).copied().unwrap_or(' ')) {
+        start -= 1;
+    }
+
+    let mut end = cursor_pos;
+    while end < chars.len() && self.is_word_char(chars.get(end).copied().unwrap_or(' ')) {
+        end += 1;
+    }
+
+    if start == end {
+        return None;
+    }
+
+    let word: String = chars[start..end].iter().collect();
+    Some((word, start, end))
+}
+
+fn is_word_char(&self, c: char) -> bool {
+    c.is_alphanumeric() || c == '_' || c == 'Ł'
+}
+
+fn get_instruction_info(&self, word: &str) -> Option<String> {
+    match word {
+        "DOD" => Some("**DOD** - Add\n\n**Operation:** `(AK) + (operand) → AK`\n\n**Description:** Adds the value to the accumulator.".to_string()),
+        "POB" => Some("**POB** - Load\n\n**Operation:** `(operand) → AK`\n\n**Description:** Loads a value into the accumulator.".to_string()),
+        "STP" => Some("**STP** - Stop\n\n**Operation:** Halt execution\n\n**Description:** Stops the program.".to_string()),
+        _ => None,
+    }
+}
+
 }
 
 #[derive(Debug, Clone)]
@@ -400,4 +473,15 @@ start:
         assert!(instruction_names.iter().any(|&name| name.contains("DOD")));
         assert!(instruction_names.iter().any(|&name| name.contains("STP")));
     }
+
+#[test]
+fn test_hover_instruction() {
+    let analyzer = SemanticAnalyzer::new();
+    let content = "POB #42";
+    let position = Position { line: 0, character: 1 };
+    
+    let hover = analyzer.get_hover_info(content, position);
+    
+    assert!(hover.is_some(), "Should return hover info for POB instruction");
+}
 }

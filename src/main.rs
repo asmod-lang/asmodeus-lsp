@@ -45,19 +45,32 @@ impl LanguageServer for AsmodeusLanguageServer {
             capabilities: ServerCapabilities {
                 text_document_sync: Some(TextDocumentSyncCapability::Kind(
                     TextDocumentSyncKind::FULL,
-                )),
-                completion_provider: Some(CompletionOptions {
-                    resolve_provider: Some(false),
-                    trigger_characters: Some(vec![".".to_string(), ":".to_string()]),
-                    work_done_progress_options: Default::default(),
-                    all_commit_characters: None,
-                    completion_item: None,
-                }),
-                ..Default::default()
-            },
+            )),
+            completion_provider: Some(CompletionOptions {
+                resolve_provider: Some(false),
+                trigger_characters: Some(vec![" ".to_string(), "\t".to_string()]),
+                work_done_progress_options: Default::default(),
+                all_commit_characters: None,
+                completion_item: None,
+            }),
+            hover_provider: Some(HoverProviderCapability::Simple(true)),
+            ..Default::default()
+        },
             ..Default::default()
         })
     }
+
+async fn hover(&self, params: HoverParams) -> tower_lsp::jsonrpc::Result<Option<Hover>> {
+    let uri = &params.text_document_position_params.text_document.uri;
+    let position = params.text_document_position_params.position;
+
+    if let Some(document) = self.documents.get(uri) {
+        let hover_info = self.analyzer.get_hover_info(&document.content, position);
+        return Ok(hover_info);
+    }
+
+    Ok(None)
+}
 
     async fn initialized(&self, _: InitializedParams) {
         self.client
