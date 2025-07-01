@@ -80,11 +80,28 @@ impl LanguageServer for AsmodeusLanguageServer {
             code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
             workspace_symbol_provider: Some(OneOf::Left(true)),
             rename_provider: Some(OneOf::Left(true)),
+            signature_help_provider: Some(SignatureHelpOptions { 
+                trigger_characters: Some(vec![" ".to_string()]),
+                retrigger_characters: Some(vec![",".to_string()]),
+                work_done_progress_options: Default::default(),
+            }),   
             ..Default::default()
         },
             ..Default::default()
         })
     }
+
+async fn signature_help(&self, params: SignatureHelpParams) -> tower_lsp::jsonrpc::Result<Option<SignatureHelp>> {
+    let uri = &params.text_document_position_params.text_document.uri;
+    let position = params.text_document_position_params.position;
+
+    if let Some(document) = self.documents.get(uri) {
+        let signature = self.analyzer.get_signature_help(&document.content, position);
+        return Ok(signature);
+    }
+
+    Ok(None)
+}
 
 
 async fn symbol(&self, params: WorkspaceSymbolParams) -> tower_lsp::jsonrpc::Result<Option<Vec<SymbolInformation>>> {

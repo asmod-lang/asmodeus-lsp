@@ -1102,6 +1102,168 @@ fn is_label_definition_location(&self, content: &str, location: &Location) -> bo
     line.chars().nth(end_char) == Some(':')
 }
 
+
+pub fn get_signature_help(&self, content: &str, position: Position) -> Option<SignatureHelp> {
+    let lines: Vec<&str> = content.lines().collect();
+    
+    if position.line as usize >= lines.len() {
+        return None;
+    }
+
+    let current_line = lines[position.line as usize];
+    let cursor_pos = position.character as usize;
+    
+    // text before cursor to analyze context
+    let text_before_cursor = if cursor_pos <= current_line.len() {
+        &current_line[..cursor_pos]
+    } else {
+        current_line
+    };
+    
+    // instruction at the beginning of the line
+    let trimmed = text_before_cursor.trim_start();
+    let words: Vec<&str> = trimmed.split_whitespace().collect();
+    
+    if words.is_empty() {
+        return None;
+    }
+    
+    let instruction = words[0];
+    if !self.is_valid_instruction(instruction) {
+        return None;
+    }
+    
+    // for the instruction
+    let signature_info = self.get_instruction_signature(instruction)?;
+    
+    Some(SignatureHelp {
+        signatures: vec![signature_info],
+        active_signature: Some(0),
+        active_parameter: self.get_active_parameter(text_before_cursor, instruction),
+    })
+}
+
+fn get_instruction_signature(&self, instruction: &str) -> Option<SignatureInformation> {
+    match instruction {
+        "DOD" => Some(SignatureInformation {
+            label: "DOD operand".to_string(),
+            documentation: Some(Documentation::String("Add operand to accumulator: (AK) + (operand) → AK".to_string())),
+            parameters: Some(vec![
+                ParameterInformation {
+                    label: ParameterLabel::Simple("operand".to_string()),
+                    documentation: Some(Documentation::String("Memory address, immediate value (#42), or label".to_string())),
+                }
+            ]),
+            active_parameter: None,
+        }),
+        "ODE" => Some(SignatureInformation {
+            label: "ODE operand".to_string(),
+            documentation: Some(Documentation::String("Subtract operand from accumulator: (AK) - (operand) → AK".to_string())),
+            parameters: Some(vec![
+                ParameterInformation {
+                    label: ParameterLabel::Simple("operand".to_string()),
+                    documentation: Some(Documentation::String("Memory address, immediate value (#42), or label".to_string())),
+                }
+            ]),
+            active_parameter: None,
+        }),
+        "POB" => Some(SignatureInformation {
+            label: "POB operand".to_string(),
+            documentation: Some(Documentation::String("Load operand into accumulator: (operand) → AK".to_string())),
+            parameters: Some(vec![
+                ParameterInformation {
+                    label: ParameterLabel::Simple("operand".to_string()),
+                    documentation: Some(Documentation::String("Memory address, immediate value (#42), or label".to_string())),
+                }
+            ]),
+            active_parameter: None,
+        }),
+        "ŁAD" | "LAD" => Some(SignatureInformation {
+            label: "ŁAD address".to_string(),
+            documentation: Some(Documentation::String("Store accumulator to address: (AK) → (address)".to_string())),
+            parameters: Some(vec![
+                ParameterInformation {
+                    label: ParameterLabel::Simple("address".to_string()),
+                    documentation: Some(Documentation::String("Memory address or label where to store AK".to_string())),
+                }
+            ]),
+            active_parameter: None,
+        }),
+        "SOB" | "SOM" | "SOZ" => Some(SignatureInformation {
+            label: format!("{} label", instruction),
+            documentation: Some(Documentation::String(match instruction {
+                "SOB" => "Unconditional jump to label".to_string(),
+                "SOM" => "Jump to label if AK < 0".to_string(),
+                "SOZ" => "Jump to label if AK = 0".to_string(),
+                _ => "Jump instruction".to_string(),
+            })),
+            parameters: Some(vec![
+                ParameterInformation {
+                    label: ParameterLabel::Simple("label".to_string()),
+                    documentation: Some(Documentation::String("Target label or address to jump to".to_string())),
+                }
+            ]),
+            active_parameter: None,
+        }),
+        "MSK" => Some(SignatureInformation {
+            label: "MSK mask".to_string(),
+            documentation: Some(Documentation::String("Set interrupt mask register".to_string())),
+            parameters: Some(vec![
+                ParameterInformation {
+                    label: ParameterLabel::Simple("mask".to_string()),
+                    documentation: Some(Documentation::String("8-bit interrupt mask value (0-255)".to_string())),
+                }
+            ]),
+            active_parameter: None,
+        }),
+        "MNO" => Some(SignatureInformation {
+            label: "MNO operand".to_string(),
+            documentation: Some(Documentation::String("Multiply accumulator by operand: (AK) * (operand) → AK [Extended]".to_string())),
+            parameters: Some(vec![
+                ParameterInformation {
+                    label: ParameterLabel::Simple("operand".to_string()),
+                    documentation: Some(Documentation::String("Value to multiply with. Requires --extended flag".to_string())),
+                }
+            ]),
+            active_parameter: None,
+        }),
+        "DZI" => Some(SignatureInformation {
+            label: "DZI operand".to_string(),
+            documentation: Some(Documentation::String("Divide accumulator by operand: (AK) / (operand) → AK [Extended]".to_string())),
+            parameters: Some(vec![
+                ParameterInformation {
+                    label: ParameterLabel::Simple("operand".to_string()),
+                    documentation: Some(Documentation::String("Divisor value. Requires --extended flag".to_string())),
+                }
+            ]),
+            active_parameter: None,
+        }),
+        "MOD" => Some(SignatureInformation {
+            label: "MOD operand".to_string(),
+            documentation: Some(Documentation::String("Modulo operation: (AK) % (operand) → AK [Extended]".to_string())),
+            parameters: Some(vec![
+                ParameterInformation {
+                    label: ParameterLabel::Simple("operand".to_string()),
+                    documentation: Some(Documentation::String("Modulo value. Requires --extended flag".to_string())),
+                }
+            ]),
+            active_parameter: None,
+        }),
+        _ => None,
+    }
+}
+
+fn get_active_parameter(&self, text_before_cursor: &str, instruction: &str) -> Option<u32> {
+    let words: Vec<&str> = text_before_cursor.split_whitespace().collect();
+    
+    // instruction + at least 1 space -> parameter mode
+    if words.len() >= 2 || (words.len() == 1 && text_before_cursor.ends_with(' ')) {
+        Some(0) // first parameter
+    } else {
+        None // still typing instruction name
+    }
+}
+
 }
 
 #[derive(Debug, Clone)]
@@ -1213,7 +1375,7 @@ fn test_find_references() {
 loop:
     DOD start
     SOB loop"#;
-    let position = Position { line: 0, character: 0 }; // na definicji 'start'
+    let position = Position { line: 0, character: 0 }; // 'start'
     let uri = Url::parse("file:///test.asmod").unwrap();
     
     let references = analyzer.find_references(content, position, &uri, true);
@@ -1332,6 +1494,26 @@ fn test_prepare_rename() {
     let range = analyzer.get_rename_range(content, position);
     
     assert!(range.is_none(), "Should not allow renaming instructions");
+}
+
+#[test]
+fn test_signature_help() {
+    let analyzer = SemanticAnalyzer::new();
+    let content = "POB ";
+    let position = Position { line: 0, character: 4 }; // after space after POB 
+    
+    let signature = analyzer.get_signature_help(content, position);
+    
+    assert!(signature.is_some(), "Should provide signature help for POB");
+    
+    let signature = signature.unwrap();
+    assert_eq!(signature.signatures.len(), 1, "Should have one signature");
+    assert_eq!(signature.active_signature, Some(0));
+    assert_eq!(signature.active_parameter, Some(0));
+    
+    let sig_info = &signature.signatures[0];
+    assert!(sig_info.label.contains("POB"));
+    assert!(sig_info.parameters.is_some());
 }
 
 }
