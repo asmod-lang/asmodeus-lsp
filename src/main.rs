@@ -54,11 +54,24 @@ impl LanguageServer for AsmodeusLanguageServer {
                 completion_item: None,
             }),
             hover_provider: Some(HoverProviderCapability::Simple(true)),
+            definition_provider: Some(OneOf::Left(true)),
             ..Default::default()
         },
             ..Default::default()
         })
     }
+
+async fn goto_definition(&self, params: GotoDefinitionParams) -> tower_lsp::jsonrpc::Result<Option<GotoDefinitionResponse>> {
+    let uri = &params.text_document_position_params.text_document.uri;
+    let position = params.text_document_position_params.position;
+
+    if let Some(document) = self.documents.get(uri) {
+        let definition = self.analyzer.get_definition(&document.content, position, uri);
+        return Ok(definition);
+    }
+
+    Ok(None)
+}
 
 async fn hover(&self, params: HoverParams) -> tower_lsp::jsonrpc::Result<Option<Hover>> {
     let uri = &params.text_document_position_params.text_document.uri;

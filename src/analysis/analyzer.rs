@@ -325,6 +325,65 @@ impl SemanticAnalyzer {
         }
     }
 
+fn get_label_info(&self, word: &str, content: &str) -> Option<String> {
+    let lines: Vec<&str> = content.lines().collect();
+    
+    for (line_num, line) in lines.iter().enumerate() {
+        let trimmed = line.trim();
+        if trimmed.starts_with(&format!("{}:", word)) {
+            return Some(format!(
+                "**Label:** `{}`\n\n**Defined at:** Line {}\n\n**Definition:** `{}`",
+                word,
+                line_num + 1,
+                trimmed
+            ));
+        }
+    }
+    None
+}
+
+pub fn get_definition(&self, content: &str, position: Position, uri: &Url) -> Option<GotoDefinitionResponse> {
+    let lines: Vec<&str> = content.lines().collect();
+    
+    if position.line as usize >= lines.len() {
+        return None;
+    }
+
+    let current_line = lines[position.line as usize];
+    let cursor_pos = position.character as usize;
+
+    let word_info = self.get_word_at_position(current_line, cursor_pos)?;
+    let (word, _, _) = word_info;
+
+    self.find_label_definition(&word, content, uri)
+}
+
+fn find_label_definition(&self, label: &str, content: &str, uri: &Url) -> Option<GotoDefinitionResponse> {
+    let lines: Vec<&str> = content.lines().collect();
+    
+    for (line_num, line) in lines.iter().enumerate() {
+        let trimmed = line.trim();
+        if trimmed.starts_with(&format!("{}:", label)) {
+            let location = Location {
+                uri: uri.clone(),
+                range: Range {
+                    start: Position {
+                        line: line_num as u32,
+                        character: 0,
+                    },
+                    end: Position {
+                        line: line_num as u32,
+                        character: trimmed.len() as u32,
+                    },
+                },
+            };
+            return Some(GotoDefinitionResponse::Scalar(location));
+        }
+    }
+    None
+}
+
+    
 pub fn get_hover_info(&self, content: &str, position: Position) -> Option<Hover> {
     let lines: Vec<&str> = content.lines().collect();
     
@@ -335,11 +394,17 @@ pub fn get_hover_info(&self, content: &str, position: Position) -> Option<Hover>
     let current_line = lines[position.line as usize];
     let cursor_pos = position.character as usize;
 
-    // word at cursor position
     let word_info = self.get_word_at_position(current_line, cursor_pos)?;
     let (word, start_pos, end_pos) = word_info;
 
-    let hover_content = self.get_instruction_info(&word)?;
+    // instruction info first
+    let hover_content = if let Some(instruction_info) = self.get_instruction_info(&word) {
+        instruction_info
+    } else if let Some(label_info) = self.get_label_info(&word, content) {
+        label_info
+    } else {
+        return None;
+    };
 
     Some(Hover {
         contents: HoverContents::Markup(MarkupContent {
@@ -391,8 +456,18 @@ fn is_word_char(&self, c: char) -> bool {
 fn get_instruction_info(&self, word: &str) -> Option<String> {
     match word {
         "DOD" => Some("**DOD** - Add\n\n**Operation:** `(AK) + (operand) → AK`\n\n**Description:** Adds the value to the accumulator.".to_string()),
+        "ODE" => Some("**ODE** - Subtract\n\n**Operation:** `(AK) - (operand) → AK`\n\n**Description:** Subtracts the value from the accumulator.".to_string()),
         "POB" => Some("**POB** - Load\n\n**Operation:** `(operand) → AK`\n\n**Description:** Loads a value into the accumulator.".to_string()),
+        "ŁAD" | "LAD" => Some("**ŁAD** - Store\n\n**Operation:** `(AK) → (address)`\n\n**Description:** Stores accumulator to memory.".to_string()),
+        "SOB" => Some("**SOB** - Jump\n\n**Operation:** Unconditional jump\n\n**Description:** Jumps to the specified label.".to_string()),
+        "SOM" => Some("**SOM** - Jump if negative\n\n**Operation:** Jump if `AK < 0`\n\n**Description:** Conditional jump when accumulator is negative.".to_string()),
+        "SOZ" => Some("**SOZ** - Jump if zero\n\n**Operation:** Jump if `AK = 0`\n\n**Description:** Conditional jump when accumulator is zero.".to_string()),
         "STP" => Some("**STP** - Stop\n\n**Operation:** Halt execution\n\n**Description:** Stops the program.".to_string()),
+        "WEJSCIE" => Some("**WEJSCIE** - Input\n\n**Description:** Reads user input into accumulator.".to_string()),
+        "WYJSCIE" => Some("**WYJSCIE** - Output\n\n**Description:** Outputs accumulator value.".to_string()),
+        "MNO" => Some("**MNO** - Multiply *(Extended)*\n\n**Operation:** `(AK) * (operand) → AK`\n\n**Note:** Requires `--extended` flag.".to_string()),
+        "DZI" => Some("**DZI** - Divide *(Extended)*\n\n**Operation:** `(AK) / (operand) → AK`\n\n**Note:** Requires `--extended` flag.".to_string()),
+        "MOD" => Some("**MOD** - Modulo *(Extended)*\n\n**Operation:** `(AK) % (operand) → AK`\n\n**Note:** Requires `--extended` flag.".to_string()),
         _ => None,
     }
 }
@@ -483,5 +558,19 @@ fn test_hover_instruction() {
     let hover = analyzer.get_hover_info(content, position);
     
     assert!(hover.is_some(), "Should return hover info for POB instruction");
+}
+
+#[test]
+fn test_goto_definition() {
+    let analyzer = SemanticAnalyzer::new();
+    let content = r#"start:
+    POB #42
+    SOB start"#;
+    let position = Position { line: 2, character: 8 }; // 'start' w SOB
+    let uri = Url::parse("file:///test.asmod").unwrap();
+    
+    let definition = analyzer.get_definition(content, position, &uri);
+    
+    assert!(definition.is_some(), "Should find label definition");
 }
 }
