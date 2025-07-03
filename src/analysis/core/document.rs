@@ -18,6 +18,10 @@ impl DocumentState {
         }
     }
 
+    pub fn get_uri(&self) -> &Url {
+        &self.uri
+    }
+
     pub fn update_content(&mut self, content: String, version: i32) {
         self.content = content;
         self.version = version;

@@ -1,10 +1,10 @@
-use tower_lsp::{Client, LanguageServer};
-use tower_lsp::lsp_types::*;
-use tower_lsp::jsonrpc::Result as LspResult;
-use std::sync::Arc;
 use dashmap::DashMap;
+use std::sync::Arc;
+use tower_lsp::jsonrpc::Result as LspResult;
+use tower_lsp::lsp_types::*;
+use tower_lsp::{Client, LanguageServer};
 
-use crate::analysis::{SemanticAnalyzer, DocumentState};
+use crate::analysis::{DocumentState, SemanticAnalyzer};
 use crate::server::{capabilities::create_server_capabilities, handlers::RequestHandlers};
 
 #[derive(Debug)]
@@ -31,7 +31,17 @@ impl AsmodeusLanguageServer {
 
     async fn analyze_and_publish_diagnostics(&self, uri: &Url, content: &str) {
         let diagnostics = self.analyzer.analyze_document(content, uri);
-        
+
+        if let Some(document) = self.documents.get(uri) {
+            if document.get_uri() != uri {
+                eprintln!("Warning: URI mismatch for document {}", uri);
+            }
+        }
+
+        if let Some(mut document) = self.documents.get_mut(uri) {
+            document.set_diagnostics(diagnostics.clone());
+        }
+
         self.client
             .publish_diagnostics(uri.clone(), diagnostics, None)
             .await;
@@ -92,7 +102,10 @@ impl LanguageServer for AsmodeusLanguageServer {
 
     async fn did_save(&self, params: DidSaveTextDocumentParams) {
         self.client
-            .log_message(MessageType::INFO, format!("Saved document: {}", params.text_document.uri))
+            .log_message(
+                MessageType::INFO,
+                format!("Saved document: {}", params.text_document.uri),
+            )
             .await;
     }
 
@@ -105,7 +118,10 @@ impl LanguageServer for AsmodeusLanguageServer {
         self.handlers.handle_hover(params).await
     }
 
-    async fn goto_definition(&self, params: GotoDefinitionParams) -> LspResult<Option<GotoDefinitionResponse>> {
+    async fn goto_definition(
+        &self,
+        params: GotoDefinitionParams,
+    ) -> LspResult<Option<GotoDefinitionResponse>> {
         self.handlers.handle_goto_definition(params).await
     }
 
@@ -113,15 +129,24 @@ impl LanguageServer for AsmodeusLanguageServer {
         self.handlers.handle_references(params).await
     }
 
-    async fn document_symbol(&self, params: DocumentSymbolParams) -> LspResult<Option<DocumentSymbolResponse>> {
+    async fn document_symbol(
+        &self,
+        params: DocumentSymbolParams,
+    ) -> LspResult<Option<DocumentSymbolResponse>> {
         self.handlers.handle_document_symbol(params).await
     }
 
-    async fn symbol(&self, params: WorkspaceSymbolParams) -> LspResult<Option<Vec<SymbolInformation>>> {
+    async fn symbol(
+        &self,
+        params: WorkspaceSymbolParams,
+    ) -> LspResult<Option<Vec<SymbolInformation>>> {
         self.handlers.handle_workspace_symbol(params).await
     }
 
-    async fn semantic_tokens_full(&self, params: SemanticTokensParams) -> LspResult<Option<SemanticTokensResult>> {
+    async fn semantic_tokens_full(
+        &self,
+        params: SemanticTokensParams,
+    ) -> LspResult<Option<SemanticTokensResult>> {
         self.handlers.handle_semantic_tokens_full(params).await
     }
 
@@ -129,11 +154,17 @@ impl LanguageServer for AsmodeusLanguageServer {
         self.handlers.handle_code_action(params).await
     }
 
-    async fn signature_help(&self, params: SignatureHelpParams) -> LspResult<Option<SignatureHelp>> {
+    async fn signature_help(
+        &self,
+        params: SignatureHelpParams,
+    ) -> LspResult<Option<SignatureHelp>> {
         self.handlers.handle_signature_help(params).await
     }
 
-    async fn prepare_rename(&self, params: TextDocumentPositionParams) -> LspResult<Option<PrepareRenameResponse>> {
+    async fn prepare_rename(
+        &self,
+        params: TextDocumentPositionParams,
+    ) -> LspResult<Option<PrepareRenameResponse>> {
         self.handlers.handle_prepare_rename(params).await
     }
 
