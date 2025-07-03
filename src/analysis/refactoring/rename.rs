@@ -36,7 +36,7 @@ impl RenameProvider {
         let word_info = get_word_at_position(current_line, cursor_pos)?;
         let (old_name, _, _) = word_info;
         
-        if !is_valid_symbol_name(new_name) {
+        if let Err(_) = self.validate_new_name(new_name) {
             return None;
         }
 
@@ -44,7 +44,8 @@ impl RenameProvider {
             return None;
         }
 
-        if self.instruction_db.is_valid_instruction(new_name) {
+        let conflicts = self.check_name_conflicts(content, new_name, Some(position));
+        if !conflicts.is_empty() {
             return None;
         }
 

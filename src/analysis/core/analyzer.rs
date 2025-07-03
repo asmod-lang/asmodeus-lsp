@@ -85,7 +85,7 @@ impl SemanticAnalyzer {
     }
 
     pub fn get_rename_range(&self, content: &str, position: Position) -> Option<Range> {
-        self.symbol_provider.get_rename_range(content, position)
+        self.rename_provider.get_rename_range(content, position)
     }
 
     // Semantic tokens
