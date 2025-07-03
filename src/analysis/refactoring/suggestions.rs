@@ -18,20 +18,22 @@ impl SuggestionProvider {
 
     pub fn suggest_common_fixes(&self, unknown: &str) -> Vec<String> {
         let mut suggestions = Vec::new();
-        
+
         suggestions.extend(self.find_similar_instructions(unknown));
-        suggestions.extend(self.suggest_common_typos(unknown));
-        
-        suggestions.sort();
-        suggestions.dedup();
-        
+
+        for typo_suggestion in self.suggest_common_typos(unknown) {
+            if !suggestions.contains(&typo_suggestion) {
+                suggestions.push(typo_suggestion);
+            }
+        }
+
         suggestions
     }
 
     fn suggest_common_typos(&self, unknown: &str) -> Vec<String> {
         let mut suggestions = Vec::new();
         let unknown_lower = unknown.to_lowercase();
-        
+
         let common_typos = [
             ("pob", "POB"),
             ("dod", "DOD"),
@@ -74,15 +76,19 @@ impl SuggestionProvider {
 
     pub fn suggest_alternative_instructions(&self, context: &str) -> Vec<String> {
         let mut suggestions = Vec::new();
-        
+
         match context.to_lowercase().as_str() {
             "add" | "plus" | "sum" => suggestions.push("DOD".to_string()),
             "subtract" | "minus" | "sub" => suggestions.push("ODE".to_string()),
             "load" | "get" | "fetch" => suggestions.push("POB".to_string()),
             "store" | "save" | "put" => suggestions.push("ŁAD".to_string()),
             "jump" | "goto" | "branch" => {
-                suggestions.extend(vec!["SOB".to_string(), "SOM".to_string(), "SOZ".to_string()]);
-            },
+                suggestions.extend(vec![
+                    "SOB".to_string(),
+                    "SOM".to_string(),
+                    "SOZ".to_string(),
+                ]);
+            }
             "stop" | "halt" | "end" => suggestions.push("STP".to_string()),
             "input" | "read" => suggestions.push("WEJSCIE".to_string()),
             "output" | "print" | "write" => suggestions.push("WYJSCIE".to_string()),
@@ -91,7 +97,7 @@ impl SuggestionProvider {
             "modulo" | "remainder" => suggestions.push("MOD".to_string()),
             _ => {}
         }
-        
+
         suggestions
     }
 
