@@ -128,50 +128,69 @@ impl CompletionProvider {
     fn get_instruction_completions(&self) -> Vec<CompletionItem> {
         let mut completions = Vec::new();
 
-        for instruction in self.instruction_db.get_all_instructions() {
-            let (snippet, kind_text) = match instruction.category {
-                InstructionCategory::Arithmetic => {
-                    (format!("{} ${{1:operand}}", instruction.name), "Arithmetic")
-                }
-                InstructionCategory::Memory => {
-                    (format!("{} ${{1:operand}}", instruction.name), "Memory")
-                }
-                InstructionCategory::ControlFlow => {
-                    if instruction.name == "STP" {
-                        (instruction.name.to_string(), "Control Flow")
-                    } else {
-                        (format!("{} ${{1:label}}", instruction.name), "Control Flow")
+        let categories_order = [
+            InstructionCategory::Memory,
+            InstructionCategory::Arithmetic,
+            InstructionCategory::ControlFlow,
+            InstructionCategory::InputOutput,
+            InstructionCategory::Stack,
+            InstructionCategory::Interrupt,
+        ];
+
+        for (category_idx, category) in categories_order.iter().enumerate() {
+            let category_instructions = self.instruction_db.get_instructions_by_category(category.clone());
+
+            for instruction in category_instructions {
+                let (snippet, kind_text) = match instruction.category {
+                    InstructionCategory::Arithmetic => {
+                        (format!("{} ${{1:operand}}", instruction.name), "Arithmetic")
                     }
-                }
-                InstructionCategory::Stack => (instruction.name.to_string(), "Stack"),
-                InstructionCategory::Interrupt => {
-                    if instruction.name == "MSK" {
-                        (format!("{} ${{1:mask}}", instruction.name), "Interrupt")
-                    } else {
-                        (instruction.name.to_string(), "Interrupt")
+                    InstructionCategory::Memory => {
+                        (format!("{} ${{1:operand}}", instruction.name), "Memory")
                     }
-                }
-                InstructionCategory::InputOutput => (instruction.name.to_string(), "I/O"),
-            };
+                    InstructionCategory::ControlFlow => {
+                        if instruction.name == "STP" {
+                            (instruction.name.to_string(), "Control Flow")
+                        } else {
+                            (format!("{} ${{1:label}}", instruction.name), "Control Flow")
+                        }
+                    }
+                    InstructionCategory::Stack => (instruction.name.to_string(), "Stack"),
+                    InstructionCategory::Interrupt => {
+                        if instruction.name == "MSK" {
+                            (format!("{} ${{1:mask}}", instruction.name), "Interrupt")
+                        } else {
+                            (instruction.name.to_string(), "Interrupt")
+                        }
+                    }
+                    InstructionCategory::InputOutput => (instruction.name.to_string(), "I/O"),
+                };
 
-            let label = if instruction.is_extended {
-                format!("{} (Extended)", instruction.name)
-            } else {
-                instruction.name.to_string()
-            };
+                let label = if instruction.is_extended {
+                    format!("{} (Extended)", instruction.name)
+                } else {
+                    instruction.name.to_string()
+                };
 
-            let sort_priority = if instruction.is_extended { "2" } else { "1" };
+                let extended_priority = if instruction.is_extended { "2" } else { "1" };
 
-            completions.push(CompletionItem {
-                label,
-                kind: Some(CompletionItemKind::KEYWORD),
-                detail: Some(kind_text.to_string()),
-                documentation: Some(Documentation::String(instruction.description.to_string())),
-                insert_text: Some(snippet),
-                insert_text_format: Some(InsertTextFormat::SNIPPET),
-                sort_text: Some(format!("{}_{}", sort_priority, instruction.name)),
-                ..Default::default()
-            });
+                completions.push(CompletionItem {
+                    label,
+                    kind: Some(CompletionItemKind::KEYWORD),
+                    detail: Some(kind_text.to_string()),
+                    documentation: Some(Documentation::String(instruction.description.to_string())),
+                    insert_text: Some(snippet),
+                    insert_text_format: Some(InsertTextFormat::SNIPPET),
+                    sort_text: Some(format!(
+                        "{}_{}_{}_{}",
+                        category_idx,
+                        extended_priority,
+                        instruction.name,
+                        instruction.category.clone() as u8
+                    )),
+                    ..Default::default()
+                });
+            }
         }
 
         completions
