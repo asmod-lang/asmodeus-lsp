@@ -3,7 +3,7 @@ use tower_lsp::lsp_types::*;
 
 #[test]
 fn test_semantic_analyzer_creation() {
-    let analyzer = SemanticAnalyzer::new();
+    let _analyzer = SemanticAnalyzer::new();
     // can be created?
     assert!(true);
 }

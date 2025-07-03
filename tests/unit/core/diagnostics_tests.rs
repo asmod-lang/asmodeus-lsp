@@ -3,7 +3,7 @@ use tower_lsp::lsp_types::*;
 
 #[test]
 fn test_diagnostics_engine_creation() {
-    let engine = DiagnosticsEngine::new();
+    let _engine = DiagnosticsEngine::new();
     // can be created?
     assert!(true);
 }
@@ -18,9 +18,12 @@ start:
     STP
 "#;
     let uri = Url::parse("file:///test.asmod").unwrap();
-    
+
     let diagnostics = engine.analyze_document(content, &uri);
-    assert!(diagnostics.is_empty(), "Valid document should produce no diagnostics");
+    assert!(
+        diagnostics.is_empty(),
+        "Valid document should produce no diagnostics"
+    );
 }
 
 #[test]
@@ -31,14 +34,19 @@ start:
     UNKNOWN_INSTRUCTION #42
 "#;
     let uri = Url::parse("file:///test.asmod").unwrap();
-    
+
     let diagnostics = engine.analyze_document(content, &uri);
-    assert!(!diagnostics.is_empty(), "Should produce diagnostics for unknown instruction");
-    
+    assert!(
+        !diagnostics.is_empty(),
+        "Should produce diagnostics for unknown instruction"
+    );
+
     let diagnostic = &diagnostics[0];
     assert_eq!(diagnostic.severity, Some(DiagnosticSeverity::ERROR));
-    assert!(diagnostic.message.contains("Unknown instruction") || 
-            diagnostic.message.contains("undefined macro"));
+    assert!(
+        diagnostic.message.contains("Unknown instruction")
+            || diagnostic.message.contains("undefined macro")
+    );
 }
 
 #[test]
@@ -46,14 +54,20 @@ fn test_analyze_document_with_lexer_error() {
     let engine = DiagnosticsEngine::new();
     let content = "@#$%^&*()"; // should cause lexer error
     let uri = Url::parse("file:///test.asmod").unwrap();
-    
+
     let diagnostics = engine.analyze_document(content, &uri);
-    assert!(!diagnostics.is_empty(), "Should produce diagnostics for lexer errors");
-    
+    assert!(
+        !diagnostics.is_empty(),
+        "Should produce diagnostics for lexer errors"
+    );
+
     let diagnostic = &diagnostics[0];
     assert_eq!(diagnostic.severity, Some(DiagnosticSeverity::ERROR));
     assert!(diagnostic.message.contains("Lexer error"));
-    assert_eq!(diagnostic.code, Some(NumberOrString::String("LEX001".to_string())));
+    assert_eq!(
+        diagnostic.code,
+        Some(NumberOrString::String("LEX001".to_string()))
+    );
 }
 
 #[test]
@@ -64,16 +78,18 @@ fn test_analyze_document_with_parser_error() {
     POB POB POB
 "#;
     let uri = Url::parse("file:///test.asmod").unwrap();
-    
+
     let diagnostics = engine.analyze_document(content, &uri);
-    
+
     // should either produce parser error or semantic error
     if !diagnostics.is_empty() {
         let diagnostic = &diagnostics[0];
         assert_eq!(diagnostic.severity, Some(DiagnosticSeverity::ERROR));
-        assert!(diagnostic.message.contains("Parser error") || 
-                diagnostic.message.contains("Unknown instruction") ||
-                diagnostic.message.contains("undefined macro"));
+        assert!(
+            diagnostic.message.contains("Parser error")
+                || diagnostic.message.contains("Unknown instruction")
+                || diagnostic.message.contains("undefined macro")
+        );
     }
 }
 
@@ -82,7 +98,7 @@ fn test_analyze_whitespace_only_document() {
     let engine = DiagnosticsEngine::new();
     let content = "   \n\t  \n   ";
     let uri = Url::parse("file:///test.asmod").unwrap();
-    
+
     let diagnostics = engine.analyze_document(content, &uri);
     // should be valid
     assert!(diagnostics.is_empty() || diagnostics.len() <= 1);
@@ -97,7 +113,7 @@ fn test_analyze_comments_only_document() {
     ; Indented comment
 "#;
     let uri = Url::parse("file:///test.asmod").unwrap();
-    
+
     let diagnostics = engine.analyze_document(content, &uri);
     // should be valid
     assert!(diagnostics.is_empty());
@@ -115,12 +131,12 @@ start:
     STP            ; Valid instruction
 "#;
     let uri = Url::parse("file:///test.asmod").unwrap();
-    
+
     let diagnostics = engine.analyze_document(content, &uri);
-    
+
     // should produce diagnostics for invalid instructions
     assert!(!diagnostics.is_empty());
-    
+
     // all diagnostics should be errors
     for diagnostic in &diagnostics {
         assert_eq!(diagnostic.severity, Some(DiagnosticSeverity::ERROR));
@@ -134,12 +150,12 @@ fn test_diagnostic_positions() {
     let content = r#"start:
     INVALID_INSTRUCTION"#;
     let uri = Url::parse("file:///test.asmod").unwrap();
-    
+
     let diagnostics = engine.analyze_document(content, &uri);
-    
+
     if !diagnostics.is_empty() {
         let diagnostic = &diagnostics[0];
-        
+
         // diagnostic should has reasonable position
         assert!(diagnostic.range.start.line <= 1);
         assert!(diagnostic.range.start.character < 50);
@@ -154,21 +170,22 @@ fn test_diagnostic_codes() {
     let engine = DiagnosticsEngine::new();
     let content = "INVALID_INSTRUCTION";
     let uri = Url::parse("file:///test.asmod").unwrap();
-    
+
     let diagnostics = engine.analyze_document(content, &uri);
-    
+
     if !diagnostics.is_empty() {
         let diagnostic = &diagnostics[0];
-        
+
         // should have a diagnostic code
         assert!(diagnostic.code.is_some());
-        
+
         match &diagnostic.code {
             Some(NumberOrString::String(code)) => {
                 // should be one of the expected error codes
-                assert!(code == "LEX001" || code == "PAR001" || 
-                       code == "SEM001" || code == "SEM002");
-            },
+                assert!(
+                    code == "LEX001" || code == "PAR001" || code == "SEM001" || code == "SEM002"
+                );
+            }
             _ => panic!("Expected string error code"),
         }
     }
@@ -183,14 +200,14 @@ SECOND_INVALID
 THIRD_INVALID
 "#;
     let uri = Url::parse("file:///test.asmod").unwrap();
-    
+
     let diagnostics = engine.analyze_document(content, &uri);
-    
+
     if diagnostics.len() > 1 {
         for i in 1..diagnostics.len() {
-            let prev = &diagnostics[i-1];
+            let prev = &diagnostics[i - 1];
             let curr = &diagnostics[i];
-            
+
             assert!(prev.range.start.line <= curr.range.start.line);
             if prev.range.start.line == curr.range.start.line {
                 assert!(prev.range.start.character <= curr.range.start.character);
