@@ -219,10 +219,6 @@ impl InstructionDatabase {
         self.instructions.contains_key(name)
     }
 
-    pub fn get_all_instructions(&self) -> Vec<&InstructionInfo> {
-        self.instructions.values().collect()
-    }
-
     pub fn get_instructions_by_category(
         &self,
         category: InstructionCategory,
