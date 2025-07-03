@@ -1,12 +1,12 @@
-use tower_lsp::lsp_types::*;
 use crate::analysis::{
     core::DiagnosticsEngine,
     language::{
-        CompletionProvider, HoverProvider, NavigationProvider, 
-        SymbolProvider, SemanticTokensProvider, SignatureHelpProvider
+        CompletionProvider, HoverProvider, NavigationProvider, SemanticTokensProvider,
+        SignatureHelpProvider, SymbolProvider,
     },
-    refactoring::{CodeActionsProvider, RenameProvider}
+    refactoring::{CodeActionsProvider, RenameProvider},
 };
+use tower_lsp::lsp_types::*;
 
 #[derive(Debug)]
 pub struct SemanticAnalyzer {
@@ -52,12 +52,25 @@ impl SemanticAnalyzer {
     }
 
     // Navigation
-    pub fn get_definition(&self, content: &str, position: Position, uri: &Url) -> Option<GotoDefinitionResponse> {
-        self.navigation_provider.get_definition(content, position, uri)
+    pub fn get_definition(
+        &self,
+        content: &str,
+        position: Position,
+        uri: &Url,
+    ) -> Option<GotoDefinitionResponse> {
+        self.navigation_provider
+            .get_definition(content, position, uri)
     }
 
-    pub fn find_references(&self, content: &str, position: Position, uri: &Url, include_declaration: bool) -> Vec<Location> {
-        self.navigation_provider.find_references(content, position, uri, include_declaration)
+    pub fn find_references(
+        &self,
+        content: &str,
+        position: Position,
+        uri: &Url,
+        include_declaration: bool,
+    ) -> Vec<Location> {
+        self.navigation_provider
+            .find_references(content, position, uri, include_declaration)
     }
 
     // Symbols
@@ -76,16 +89,42 @@ impl SemanticAnalyzer {
 
     // Signature help
     pub fn get_signature_help(&self, content: &str, position: Position) -> Option<SignatureHelp> {
-        self.signature_help_provider.get_signature_help(content, position)
+        self.signature_help_provider
+            .get_signature_help(content, position)
     }
 
     // Code actions
-    pub fn get_code_actions(&self, content: &str, range: Range, uri: &Url, context: &CodeActionContext) -> Vec<CodeActionOrCommand> {
-        self.code_actions_provider.get_code_actions(content, range, uri, context)
+    pub fn get_code_actions(
+        &self,
+        content: &str,
+        range: Range,
+        uri: &Url,
+        context: &CodeActionContext,
+    ) -> Vec<CodeActionOrCommand> {
+        self.code_actions_provider
+            .get_code_actions(content, range, uri, context)
     }
 
     // Rename
-    pub fn rename_symbol(&self, content: &str, position: Position, new_name: &str, uri: &Url) -> Option<WorkspaceEdit> {
-        self.rename_provider.rename_symbol(content, position, new_name, uri)
+    pub fn rename_symbol(
+        &self,
+        content: &str,
+        position: Position,
+        new_name: &str,
+        uri: &Url,
+    ) -> Option<WorkspaceEdit> {
+        self.rename_provider
+            .rename_symbol(content, position, new_name, uri)
+    }
+
+    // Filter workspace Symbols
+    pub fn filter_workspace_symbols(
+        &self,
+        symbols: &mut Vec<SymbolInformation>,
+        query: &str,
+        uri: &Url,
+    ) {
+        self.symbol_provider
+            .filter_workspace_symbols(symbols, query, uri)
     }
 }
