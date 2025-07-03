@@ -1,4 +1,4 @@
-use asmodeus_lsp::analysis::language::ValidationProvider;
+use crate::analysis::language::validation::ValidationProvider; 
 use tower_lsp::lsp_types::*;
 
 #[test]
