@@ -1,3 +1,4 @@
+use asmodeus_lsp::analysis::utils::{create_diagnostic, position_to_range};
 use tower_lsp::lsp_types::*;
 
 pub fn test_uri(filename: &str) -> Url {
@@ -8,25 +9,12 @@ pub fn test_position(line: u32, character: u32) -> Position {
     Position { line, character }
 }
 
-pub fn test_range(start_line: u32, start_char: u32, end_line: u32, end_char: u32) -> Range {
-    Range {
-        start: Position { line: start_line, character: start_char },
-        end: Position { line: end_line, character: end_char },
-    }
+pub fn test_range(start_line: u32, start_char: u32, end_char: u32) -> Range {
+    position_to_range(start_line, start_char, end_char)
 }
 
 pub fn test_diagnostic(range: Range, severity: DiagnosticSeverity, message: &str) -> Diagnostic {
-    Diagnostic {
-        range,
-        severity: Some(severity),
-        code: Some(NumberOrString::String("TEST001".to_string())),
-        source: Some("asmodeus-lsp".to_string()),
-        message: message.to_string(),
-        related_information: None,
-        tags: None,
-        code_description: None,
-        data: None,
-    }
+    create_diagnostic(range, severity, "TEST001", message.to_string())
 }
 
 pub const SAMPLE_VALID_PROGRAM: &str = r#"

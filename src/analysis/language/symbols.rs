@@ -1,4 +1,4 @@
-use crate::analysis::utils::is_valid_symbol_name;
+use crate::analysis::utils::{create_location, is_valid_symbol_name, word_range};
 use tower_lsp::lsp_types::*;
 
 #[derive(Debug)]
@@ -22,24 +22,15 @@ impl SymbolProvider {
                 let label_name = &trimmed[..colon_pos];
 
                 if !label_name.is_empty() && is_valid_symbol_name(label_name) {
+                    let label_start = line.len() - trimmed.len(); // leading whitespace
+                    let range = word_range(line_num as u32, label_start, label_start + colon_pos);
+
                     symbols.push(SymbolInformation {
                         name: label_name.to_string(),
                         kind: SymbolKind::FUNCTION,
                         tags: None,
                         deprecated: None,
-                        location: Location {
-                            uri: Url::parse("file:///dummy").unwrap(),
-                            range: Range {
-                                start: Position {
-                                    line: line_num as u32,
-                                    character: (line.len() - trimmed.len()) as u32, // leading whitespace
-                                },
-                                end: Position {
-                                    line: line_num as u32,
-                                    character: (line.len() - trimmed.len() + colon_pos) as u32,
-                                },
-                            },
-                        },
+                        location: create_location(&Url::parse("file:///dummy").unwrap(), range),
                         container_name: None,
                     });
                 }

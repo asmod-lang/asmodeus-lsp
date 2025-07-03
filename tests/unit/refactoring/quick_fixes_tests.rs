@@ -1,5 +1,5 @@
 use asmodeus_lsp::analysis::refactoring::QuickFixProvider;
-use asmodeus_lsp::analysis::utils::position_to_range;
+use asmodeus_lsp::analysis::utils::{create_diagnostic, position_to_range};
 use tower_lsp::lsp_types::*;
 
 #[test]
@@ -8,13 +8,12 @@ fn test_create_quick_fix_unknown_instruction() {
     let content = "DOX #42";
     let uri = Url::parse("file:///test.asmod").unwrap();
 
-    let diagnostic = Diagnostic {
-        range: position_to_range(0, 0, 3),
-        severity: Some(DiagnosticSeverity::ERROR),
-        message: "Unknown instruction: 'DOX'".to_string(),
-        source: Some("asmodeus-lsp".to_string()),
-        ..Default::default()
-    };
+    let diagnostic = create_diagnostic(
+        position_to_range(0, 0, 3),
+        DiagnosticSeverity::ERROR,
+        "SEM001",
+        "Unknown instruction: 'DOX'".to_string(),
+    );
 
     let action = provider.create_quick_fix(&diagnostic, content, &uri);
 
@@ -35,13 +34,12 @@ fn test_create_quick_fix_invalid_message_format() {
     let content = "DOX #42";
     let uri = Url::parse("file:///test.asmod").unwrap();
 
-    let diagnostic = Diagnostic {
-        range: position_to_range(0, 0, 3),
-        severity: Some(DiagnosticSeverity::ERROR),
-        message: "Unknown instruction DOX".to_string(),
-        source: Some("asmodeus-lsp".to_string()),
-        ..Default::default()
-    };
+    let diagnostic = create_diagnostic(
+        position_to_range(0, 0, 3),
+        DiagnosticSeverity::ERROR,
+        "SEM001",
+        "Unknown instruction DOX".to_string(),
+    );
 
     let action = provider.create_quick_fix(&diagnostic, content, &uri);
 
