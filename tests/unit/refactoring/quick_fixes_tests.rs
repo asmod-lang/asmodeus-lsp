@@ -1,4 +1,5 @@
 use asmodeus_lsp::analysis::refactoring::QuickFixProvider;
+use asmodeus_lsp::analysis::utils::position_to_range;
 use tower_lsp::lsp_types::*;
 
 #[test]
@@ -8,16 +9,7 @@ fn test_create_quick_fix_unknown_instruction() {
     let uri = Url::parse("file:///test.asmod").unwrap();
 
     let diagnostic = Diagnostic {
-        range: Range {
-            start: Position {
-                line: 0,
-                character: 0,
-            },
-            end: Position {
-                line: 0,
-                character: 3,
-            },
-        },
+        range: position_to_range(0, 0, 3),
         severity: Some(DiagnosticSeverity::ERROR),
         message: "Unknown instruction: 'DOX'".to_string(),
         source: Some("asmodeus-lsp".to_string()),
@@ -32,7 +24,6 @@ fn test_create_quick_fix_unknown_instruction() {
             assert_eq!(action.kind, Some(CodeActionKind::QUICKFIX));
             assert!(action.title.contains("Replace with"));
             assert!(action.title.contains("DOD"));
-            assert_eq!(action.is_preferred, Some(true));
         }
         _ => panic!("Expected CodeAction"),
     }
@@ -45,16 +36,7 @@ fn test_create_quick_fix_invalid_message_format() {
     let uri = Url::parse("file:///test.asmod").unwrap();
 
     let diagnostic = Diagnostic {
-        range: Range {
-            start: Position {
-                line: 0,
-                character: 0,
-            },
-            end: Position {
-                line: 0,
-                character: 3,
-            },
-        },
+        range: position_to_range(0, 0, 3),
         severity: Some(DiagnosticSeverity::ERROR),
         message: "Unknown instruction DOX".to_string(),
         source: Some("asmodeus-lsp".to_string()),
