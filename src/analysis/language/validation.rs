@@ -1,6 +1,7 @@
 use tower_lsp::lsp_types::*;
 use crate::analysis::utils::{InstructionDatabase, create_semantic_diagnostic};
 
+#[derive(Debug)]
 pub struct ValidationProvider {
     instruction_db: InstructionDatabase,
 }

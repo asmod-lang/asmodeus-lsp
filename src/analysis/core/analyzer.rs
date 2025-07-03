@@ -2,7 +2,7 @@ use crate::analysis::{
     core::DiagnosticsEngine,
     language::{
         CompletionProvider, HoverProvider, NavigationProvider, SemanticTokensProvider,
-        SignatureHelpProvider, SymbolProvider,
+        SignatureHelpProvider, SymbolProvider, ValidationProvider,
     },
     refactoring::{CodeActionsProvider, RenameProvider},
 };
@@ -19,6 +19,7 @@ pub struct SemanticAnalyzer {
     signature_help_provider: SignatureHelpProvider,
     code_actions_provider: CodeActionsProvider,
     rename_provider: RenameProvider,
+    validation_provider: ValidationProvider,
 }
 
 impl SemanticAnalyzer {
@@ -33,12 +34,17 @@ impl SemanticAnalyzer {
             signature_help_provider: SignatureHelpProvider::new(),
             code_actions_provider: CodeActionsProvider::new(),
             rename_provider: RenameProvider::new(),
+            validation_provider: ValidationProvider::new(),
         }
     }
 
     // Diagnostics
     pub fn analyze_document(&self, content: &str, uri: &Url) -> Vec<Diagnostic> {
-        self.diagnostics_engine.analyze_document(content, uri)
+        let mut diagnostics = self.diagnostics_engine.analyze_document(content, uri);
+
+        diagnostics.extend(self.validation_provider.validate_symbol_usage(content));
+
+        diagnostics
     }
 
     // Completion
