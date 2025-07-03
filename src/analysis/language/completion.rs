@@ -90,21 +90,21 @@ impl CompletionProvider {
                 // if expects a label operand
                 if let Some(instruction_info) = self.instruction_db.get_instruction(first_word) {
                     match instruction_info.operand_type {
-                        crate::analysis::utils::OperandType::Label => {
+                        crate::analysis::utils::OperandType::LabelOnly => {
                             // SOB, SOM, SOZ expect labels
                             if words.len() == 1 {
                                 return CompletionContext::Label;
                             }
                         }
-                        crate::analysis::utils::OperandType::Single
-                        | crate::analysis::utils::OperandType::Address => {
+                        crate::analysis::utils::OperandType::Flexible
+                        | crate::analysis::utils::OperandType::AddressOrLabelOnly => {
                             // POB, DOD can also use labels OR immediate values
                             if words.len() == 1 {
                                 return CompletionContext::Operand;
                             }
                         }
                         crate::analysis::utils::OperandType::None => {
-                            // STP dont need operands 
+                            // STP dont need operands
                             return CompletionContext::Instruction;
                         }
                         _ => {

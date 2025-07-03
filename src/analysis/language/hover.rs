@@ -1,12 +1,8 @@
-use tower_lsp::lsp_types::*;
 use crate::analysis::utils::{
-    InstructionDatabase, 
-    get_line_at_position, 
-    is_valid_position, 
-    get_word_at_position,
-    get_label_info,
-    word_range
+    get_label_info, get_line_at_position, get_word_at_position, is_valid_position, word_range,
+    InstructionDatabase,
 };
+use tower_lsp::lsp_types::*;
 
 #[derive(Debug)]
 pub struct HoverProvider {
@@ -54,48 +50,58 @@ impl HoverProvider {
     }
 
     fn get_instruction_info(&self, word: &str) -> Option<String> {
-    let instruction = self.instruction_db.get_instruction(word)?;
-    
-    let extended_note = if instruction.is_extended {
-        " *(Extended)*"
-    } else {
-        ""
-    };
+        let instruction = self.instruction_db.get_instruction(word)?;
 
-    let category_info = match instruction.category {
-        crate::analysis::utils::InstructionCategory::Arithmetic => "**Category:** Arithmetic",
-        crate::analysis::utils::InstructionCategory::Memory => "**Category:** Memory",
-        crate::analysis::utils::InstructionCategory::ControlFlow => "**Category:** Control Flow",
-        crate::analysis::utils::InstructionCategory::Stack => "**Category:** Stack",
-        crate::analysis::utils::InstructionCategory::Interrupt => "**Category:** Interrupt",
-        crate::analysis::utils::InstructionCategory::InputOutput => "**Category:** I/O",
-    };
+        let extended_note = if instruction.is_extended {
+            " *(Extended)*"
+        } else {
+            ""
+        };
 
-    let operand_info = match instruction.operand_type {
-        crate::analysis::utils::OperandType::None => "",
-        crate::analysis::utils::OperandType::Single => "\n\n**Operand:** Memory address, immediate value (#42), or label",
-        crate::analysis::utils::OperandType::Address => "\n\n**Operand:** Memory address or label",
-        crate::analysis::utils::OperandType::Label => "\n\n**Operand:** Target label or address",
-        crate::analysis::utils::OperandType::Immediate => "\n\n**Operand:** Immediate value (#42)",
-    };
+        let category_info = match instruction.category {
+            crate::analysis::utils::InstructionCategory::Arithmetic => "**Category:** Arithmetic",
+            crate::analysis::utils::InstructionCategory::Memory => "**Category:** Memory",
+            crate::analysis::utils::InstructionCategory::ControlFlow => {
+                "**Category:** Control Flow"
+            }
+            crate::analysis::utils::InstructionCategory::Stack => "**Category:** Stack",
+            crate::analysis::utils::InstructionCategory::Interrupt => "**Category:** Interrupt",
+            crate::analysis::utils::InstructionCategory::InputOutput => "**Category:** I/O",
+        };
 
-    let extended_info = if instruction.is_extended {
-        "\n\n**Note:** Requires `--extended` flag"
-    } else {
-        ""
-    };
+        let operand_info = match instruction.operand_type {
+            crate::analysis::utils::OperandType::None => "",
+            crate::analysis::utils::OperandType::Flexible => {
+                "\n\n**Operand:** Memory address, immediate value (#42), or label"
+            }
+            crate::analysis::utils::OperandType::AddressOrLabelOnly => {
+                "\n\n**Operand:** Memory address or label"
+            }
+            crate::analysis::utils::OperandType::LabelOnly => {
+                "\n\n**Operand:** Target label or address"
+            }
+            crate::analysis::utils::OperandType::ImmediateOnly => {
+                "\n\n**Operand:** Immediate value (#42)"
+            }
+        };
 
-    let result = format!(
-        "**{}**{}\n\n**Operation:** `{}`\n\n{}\n\n**Description:** {}{}{}",
-        instruction.name,
-        extended_note,
-        instruction.operation,
-        category_info,
-        instruction.description,
-        operand_info,
-        extended_info
-    );
-    
-    Some(result)
-}
+        let extended_info = if instruction.is_extended {
+            "\n\n**Note:** Requires `--extended` flag"
+        } else {
+            ""
+        };
+
+        let result = format!(
+            "**{}**{}\n\n**Operation:** `{}`\n\n{}\n\n**Description:** {}{}{}",
+            instruction.name,
+            extended_note,
+            instruction.operation,
+            category_info,
+            instruction.description,
+            operand_info,
+            extended_info
+        );
+
+        Some(result)
+    }
 }

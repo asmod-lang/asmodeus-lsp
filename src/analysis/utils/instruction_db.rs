@@ -23,10 +23,10 @@ pub enum InstructionCategory {
 #[derive(Debug, Clone, PartialEq)]
 pub enum OperandType {
     None,
-    Single,     // single value (address, immediate, label)
-    Address,    // just memory address
-    Label,      // just label
-    Immediate,  // just immediate value
+    AddressOrLabelOnly,
+    LabelOnly,
+    ImmediateOnly,
+    Flexible,
 }
 
 #[derive(Debug)]
@@ -51,7 +51,7 @@ impl InstructionDatabase {
                 description: "Add value to accumulator: (AK) + (operand) → AK",
                 operation: "(AK) + (operand) → AK",
                 category: InstructionCategory::Arithmetic,
-                operand_type: OperandType::Single,
+                operand_type: OperandType::Flexible,
                 is_extended: false,
             },
             InstructionInfo {
@@ -59,17 +59,16 @@ impl InstructionDatabase {
                 description: "Subtract value from accumulator: (AK) - (operand) → AK",
                 operation: "(AK) - (operand) → AK",
                 category: InstructionCategory::Arithmetic,
-                operand_type: OperandType::Single,
+                operand_type: OperandType::Flexible,
                 is_extended: false,
             },
-            
             // Memory instructions
             InstructionInfo {
                 name: "POB",
                 description: "Load value into accumulator: (operand) → AK",
                 operation: "(operand) → AK",
                 category: InstructionCategory::Memory,
-                operand_type: OperandType::Single,
+                operand_type: OperandType::Flexible,
                 is_extended: false,
             },
             InstructionInfo {
@@ -77,17 +76,16 @@ impl InstructionDatabase {
                 description: "Store accumulator to memory: (AK) → (address)",
                 operation: "(AK) → (address)",
                 category: InstructionCategory::Memory,
-                operand_type: OperandType::Address,
+                operand_type: OperandType::AddressOrLabelOnly,
                 is_extended: false,
             },
-            
             // Control flow instructions
             InstructionInfo {
                 name: "SOB",
                 description: "Unconditional jump to label",
                 operation: "Unconditional jump",
                 category: InstructionCategory::ControlFlow,
-                operand_type: OperandType::Label,
+                operand_type: OperandType::LabelOnly,
                 is_extended: false,
             },
             InstructionInfo {
@@ -95,7 +93,7 @@ impl InstructionDatabase {
                 description: "Jump to label if AK < 0",
                 operation: "Jump if AK < 0",
                 category: InstructionCategory::ControlFlow,
-                operand_type: OperandType::Label,
+                operand_type: OperandType::LabelOnly,
                 is_extended: false,
             },
             InstructionInfo {
@@ -103,7 +101,7 @@ impl InstructionDatabase {
                 description: "Jump to label if AK = 0",
                 operation: "Jump if AK = 0",
                 category: InstructionCategory::ControlFlow,
-                operand_type: OperandType::Label,
+                operand_type: OperandType::LabelOnly,
                 is_extended: false,
             },
             InstructionInfo {
@@ -114,7 +112,6 @@ impl InstructionDatabase {
                 operand_type: OperandType::None,
                 is_extended: false,
             },
-            
             // Stack instructions
             InstructionInfo {
                 name: "SDP",
@@ -132,7 +129,6 @@ impl InstructionDatabase {
                 operand_type: OperandType::None,
                 is_extended: false,
             },
-            
             // Interrupt instructions
             InstructionInfo {
                 name: "DNS",
@@ -155,7 +151,7 @@ impl InstructionDatabase {
                 description: "Set interrupt mask register",
                 operation: "Set interrupt mask",
                 category: InstructionCategory::Interrupt,
-                operand_type: OperandType::Single,
+                operand_type: OperandType::ImmediateOnly,
                 is_extended: false,
             },
             InstructionInfo {
@@ -166,7 +162,6 @@ impl InstructionDatabase {
                 operand_type: OperandType::None,
                 is_extended: false,
             },
-            
             // I/O instructions
             InstructionInfo {
                 name: "WEJSCIE",
@@ -184,14 +179,13 @@ impl InstructionDatabase {
                 operand_type: OperandType::None,
                 is_extended: false,
             },
-            
             // Extended instructions
             InstructionInfo {
                 name: "MNO",
                 description: "Multiply: (AK) * (operand) → AK [Extended]",
                 operation: "(AK) * (operand) → AK",
                 category: InstructionCategory::Arithmetic,
-                operand_type: OperandType::Single,
+                operand_type: OperandType::Flexible,
                 is_extended: true,
             },
             InstructionInfo {
@@ -199,7 +193,7 @@ impl InstructionDatabase {
                 description: "Divide: (AK) / (operand) → AK [Extended]",
                 operation: "(AK) / (operand) → AK",
                 category: InstructionCategory::Arithmetic,
-                operand_type: OperandType::Single,
+                operand_type: OperandType::Flexible,
                 is_extended: true,
             },
             InstructionInfo {
@@ -207,7 +201,7 @@ impl InstructionDatabase {
                 description: "Modulo: (AK) % (operand) → AK [Extended]",
                 operation: "(AK) % (operand) → AK",
                 category: InstructionCategory::Arithmetic,
-                operand_type: OperandType::Single,
+                operand_type: OperandType::Flexible,
                 is_extended: true,
             },
         ];
@@ -229,7 +223,10 @@ impl InstructionDatabase {
         self.instructions.values().collect()
     }
 
-    pub fn get_instructions_by_category(&self, category: InstructionCategory) -> Vec<&InstructionInfo> {
+    pub fn get_instructions_by_category(
+        &self,
+        category: InstructionCategory,
+    ) -> Vec<&InstructionInfo> {
         self.instructions
             .values()
             .filter(|info| info.category == category)
@@ -239,14 +236,15 @@ impl InstructionDatabase {
     pub fn find_similar_instructions(&self, unknown: &str) -> Vec<String> {
         let mut suggestions = Vec::new();
         let unknown_upper = unknown.to_uppercase();
-        
+
         for &instruction_name in self.instructions.keys() {
             let distance = levenshtein_distance(&unknown_upper, instruction_name);
-            if distance <= 2 { // max 2 character differences
+            if distance <= 2 {
+                // max 2 character differences
                 suggestions.push(instruction_name.to_string());
             }
         }
-        
+
         // by similarity (distance)
         suggestions.sort_by_key(|s| levenshtein_distance(&unknown_upper, s));
         suggestions
@@ -258,9 +256,9 @@ fn levenshtein_distance(a: &str, b: &str) -> usize {
     let b_chars: Vec<char> = b.chars().collect();
     let a_len = a_chars.len();
     let b_len = b_chars.len();
-    
+
     let mut matrix = vec![vec![0; b_len + 1]; a_len + 1];
-    
+
     // first row and column
     for i in 0..=a_len {
         matrix[i][0] = i;
@@ -268,20 +266,24 @@ fn levenshtein_distance(a: &str, b: &str) -> usize {
     for j in 0..=b_len {
         matrix[0][j] = j;
     }
-    
+
     // matrix
     for i in 1..=a_len {
         for j in 1..=b_len {
-            let cost = if a_chars[i - 1] == b_chars[j - 1] { 0 } else { 1 };
+            let cost = if a_chars[i - 1] == b_chars[j - 1] {
+                0
+            } else {
+                1
+            };
             matrix[i][j] = std::cmp::min(
                 std::cmp::min(
-                    matrix[i - 1][j] + 1,     // deletion
-                    matrix[i][j - 1] + 1      // insertion
+                    matrix[i - 1][j] + 1, // deletion
+                    matrix[i][j - 1] + 1, // insertion
                 ),
-                matrix[i - 1][j - 1] + cost   // substitution
+                matrix[i - 1][j - 1] + cost, // substitution
             );
         }
     }
-    
+
     matrix[a_len][b_len]
 }
