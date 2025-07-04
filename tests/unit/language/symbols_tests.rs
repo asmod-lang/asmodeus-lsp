@@ -62,6 +62,7 @@ valid_label:
 }
 
 #[test]
+#[allow(deprecated)]
 fn test_filter_workspace_symbols() {
     let provider = SymbolProvider::new();
     let uri = Url::parse("file:///test.asmod").unwrap();
