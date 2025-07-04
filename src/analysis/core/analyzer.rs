@@ -1,12 +1,8 @@
-use crate::analysis::{
-    core::DiagnosticsEngine,
-    language::{
-        CompletionProvider, HoverProvider, NavigationProvider, SemanticTokensProvider,
-        SignatureHelpProvider, SymbolProvider, ValidationProvider,
-    },
-    refactoring::{CodeActionsProvider, RenameProvider},
-};
+use crate::analysis::language::*;
+use crate::analysis::refactoring::*;
 use tower_lsp::lsp_types::*;
+
+use super::DiagnosticsEngine;
 
 #[derive(Debug)]
 pub struct SemanticAnalyzer {
@@ -84,6 +80,16 @@ impl SemanticAnalyzer {
         self.symbol_provider.get_document_symbols(content)
     }
 
+    pub fn filter_workspace_symbols(
+        &self,
+        symbols: &mut Vec<SymbolInformation>,
+        query: &str,
+        uri: &Url,
+    ) {
+        self.symbol_provider
+            .filter_workspace_symbols(symbols, query, uri)
+    }
+
     pub fn get_rename_range(&self, content: &str, position: Position) -> Option<Range> {
         self.rename_provider.get_rename_range(content, position)
     }
@@ -122,15 +128,5 @@ impl SemanticAnalyzer {
         self.rename_provider
             .rename_symbol(content, position, new_name, uri)
     }
-
-    // Filter workspace Symbols
-    pub fn filter_workspace_symbols(
-        &self,
-        symbols: &mut Vec<SymbolInformation>,
-        query: &str,
-        uri: &Url,
-    ) {
-        self.symbol_provider
-            .filter_workspace_symbols(symbols, query, uri)
-    }
 }
+
