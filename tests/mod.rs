@@ -2,7 +2,7 @@ use asmodeus_lsp::analysis::utils::{create_diagnostic, position_to_range};
 use tower_lsp::lsp_types::*;
 
 pub fn test_uri(filename: &str) -> Url {
-    Url::parse(&format!("file:///test_{}.asmod", filename)).unwrap()
+    Url::parse(&format!("file:///{}", filename)).unwrap()
 }
 
 pub fn test_position(line: u32, character: u32) -> Position {
@@ -39,6 +39,7 @@ start:
     POB #6
     MNO #7
     DZI #2
-    WYJSCIE
+    SOB start
+end:
     STP
 "#;
