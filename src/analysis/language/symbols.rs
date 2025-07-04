@@ -9,6 +9,7 @@ impl SymbolProvider {
         Self {}
     }
 
+    #[allow(deprecated)]
     pub fn get_document_symbols(&self, content: &str) -> Vec<SymbolInformation> {
         let mut symbols = Vec::new();
         let lines: Vec<&str> = content.lines().collect();
