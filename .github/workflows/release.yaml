@@ -76,12 +76,17 @@ jobs:
     name: Create Release
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
     - name: Download artifacts
       uses: actions/download-artifact@v4
 
+    - name: Display structure of downloaded files
+      run: ls -la
+
     - name: Create Release
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
         files: |
           asmodeus-lsp-x86_64-unknown-linux-gnu/asmodeus-lsp-${{ github.ref_name }}-x86_64-unknown-linux-gnu.tar.gz
@@ -90,5 +95,6 @@ jobs:
           asmodeus-lsp-aarch64-apple-darwin/asmodeus-lsp-${{ github.ref_name }}-aarch64-apple-darwin.tar.gz
           asmodeus-lsp-x86_64-pc-windows-msvc/asmodeus-lsp-${{ github.ref_name }}-x86_64-pc-windows-msvc.zip
         generate_release_notes: true
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        draft: false
+        prerelease: false
+        make_latest: true
