@@ -1,9 +1,9 @@
 //! Asmodeus Language Server Protocol implementation
 
-pub mod error;
 pub mod analysis;
+pub mod error;
 pub mod server;
 
-pub use analysis::{SemanticAnalyzer, DocumentState};
-pub use error::{LspError, LspResult};
+pub use analysis::{DocumentState, SemanticAnalyzer};
+pub use error::LspError;
 pub use server::AsmodeusLanguageServer;

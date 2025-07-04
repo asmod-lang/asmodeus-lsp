@@ -14,5 +14,3 @@ pub enum LspError {
     #[error("JSON serialization error: {0}")]
     JsonError(#[from] serde_json::Error),
 }
-
-pub type LspResult<T> = Result<T, LspError>;
