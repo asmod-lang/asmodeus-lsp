@@ -175,3 +175,4 @@ pub fn is_label_definition_location(content: &str, location: &Location) -> bool 
         false
     }
 }
+
